@@ -1,10 +1,14 @@
 #!/usr/bin/perl
 
+# Subversion Properties:
+# $Id$
+
 use strict;
 use warnings;
 use Net::FTP;
 use Getopt::Long;
-use Gnupg;
+use Config;
+use GnuPG;
 
 # Function prototypes
 sub usage;
@@ -12,6 +16,8 @@ sub vprint;
 sub getConfig;
 sub FTPinit;
 sub FTPlist;
+sub FTPinitLocal;
+sub FTPcheckOldVers;
 
 
 sub getConfig(){#{{{
@@ -22,8 +28,8 @@ sub getConfig(){#{{{
 	my $password	 = "b97urlington";
 	my $host		 = "localhost";
 	my $localdir	 = "~/perl_backup";
-	# Ftp-Data port, FTP control port
-	my @port		 = (20,21);
+	# FTP control port
+	my $port		 = 21;
 	# Enable Passive mode? 1 enables, 0 disables
 	my $passive      = 1;
 	# Enable Recurisve mode? 1 enables, 0 disables
@@ -32,6 +38,14 @@ sub getConfig(){#{{{
 	my $debug		 = 1;
 	# Enable binary mode? 1 enables, 0 disables
 	my $binary		 = 1;
+	# Wieviele Versionen behalten:
+	my $keep		 = 3;
+
+	# exclude patterns
+	my $exclude;
+
+	# Operating System specific
+	my $ospath  = ($Config{"osname"} =~ "MsWin" ) ? '\\' : '/';
 
 	GetOptions('user=s' => \$user,
                'pass=s' => \$password,
@@ -51,17 +65,10 @@ sub getConfig(){#{{{
 		passive	 =>	 $passive,
 		debug	 =>	 $debug,
 		binary	 =>	 $binary,
-		localdir =>  $localdir
+		localdir =>  $localdir,
+		ospath   =>  $ospath,
+		keep	 =>	 $keep
 	);
-	#my %config = (
-	#	server	 =>  "localhost",
-	#	user	 =>  "chrisbra",
-	#	pass	 =>  "b97urlington",
-	#	passive	 =>	 "1",
-	#	debug	 =>	 "1",
-	#	binary	 =>	 "1",
-	#	localdir =>   "~/perl_backup"
-	#);
 	$config{"localdir"}=glob($config{"localdir"});
 
 	return %config;
@@ -70,7 +77,7 @@ sub getConfig(){#{{{
 sub vprint {#{{{
 	my ($config, $msg) = @_;
 	if ($config->{"debug"}) {
-		print "$msg\n";
+		print "[debug] $msg\n";
 	}
 }#}}}
 
@@ -79,7 +86,13 @@ my %config;
 
 vprint(\%config,"Server: $config{'server'}");
 my $ftp=FTPinit(\%config);
-FTPlist(\%config, $ftp);
+
+my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
+FTPcheckOldVers(\@temp, \%config);
+
+my $backup_dir = FTPinitLocal(\$ftp, \%config);
+vprint(\%config, "Backing up into Directory: $backup_dir");
+
 
 
 sub FTPinit {#{{{
@@ -107,15 +120,11 @@ sub FTPinit {#{{{
 }#}}}
 
 sub FTPlist{#{{{
-	(my $config, my $ftp)  = @_;
-	my @list = $ftp->ls;
-	foreach (@list){
-		vprint($config,"Gettting: $_");
-		$ftp->get($_, "$config->{'localdir'}"."/"."$_");
-	}
+	(my $config, my $ftp, my $dir)  = @_;
+	return $ftp->dir($dir);
 }#}}}
 
-sub usage{
+sub usage{#{{{
     chomp(my $name=`basename $0`);
     print <<EOF;
 Usage: $name [OPTION]
@@ -131,5 +140,46 @@ Option:
 -h --help
 EOF
      exit(1);
-}
+}#}}}
 
+sub FTPinitLocal{#{{{
+	my $ftp		 = shift;
+	my $config	 = shift;
+
+	my @list = FTPlist(\%config, $$ftp, ".");
+
+	# Datum im Format YYYYMMDD
+	(my $mday, my $mon, my $year) = (localtime(time))[3,4,5];
+	# Test for existance of directory
+	my $dir = $year+1900 . sprintf("%02d",$mon+1) . $mday;
+	if (-d $config{"localdir"} . $config{"ospath"}.$dir) {
+		vprint($config, "Directory \'$dir\' already exists in $config{'localdir'}");
+	}
+	else {
+		mkdir $config{"localdir"} . $config{"ospath"} . $dir, 0600 ||
+		print "Cannot create Directory $dir in $config{'localdir'}.\n";
+	}
+	return $config{"localdir"} . $config{"ospath"} . $dir;
+}#}}}
+
+sub FTPcheckOldVers{#{{{
+	my $temp   = shift;
+	my $config = shift;
+	if (@temp > $config{'keep'}){
+		 # Determine the oldest entries to delete
+		 # sort reverse by mtime
+		 @temp = sort {(stat($a))[9] <=> (stat($b))[9]} @temp;
+		 while (@temp > $config{'keep'}){
+			 vprint(\%config, "Deleting file $temp[0]");
+			 eval{
+				 unlink glob($temp[0].$config{'ospath'}."*");
+				 rmdir shift(@temp);
+			 };
+			 if ($@){
+				 die "Could not delete: $!";
+			 }
+		 }
+		
+	}
+	return 1;
+}#}}}
