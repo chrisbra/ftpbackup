@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 use Net::FTP;
+use Getopt::Long;
+use Gnupg;
 
 # Function prototypes
 sub usage;
@@ -14,16 +16,52 @@ sub FTPlist;
 
 sub getConfig(){#{{{
 	
+    # Default Options, these can be overruled
+    # using commandline optins
+	my $user		 = "chrisbra";
+	my $password	 = "b97urlington";
+	my $host		 = "localhost";
+	my $localdir	 = "~/perl_backup";
+	# Ftp-Data port, FTP control port
+	my @port		 = (20,21);
+	# Enable Passive mode? 1 enables, 0 disables
+	my $passive      = 1;
+	# Enable Recurisve mode? 1 enables, 0 disables
+	my $recursive    = 1;
+	# Enable Debug mode? 1 enables, 0 disables
+	my $debug		 = 1;
+	# Enable binary mode? 1 enables, 0 disables
+	my $binary		 = 1;
+
+	GetOptions('user=s' => \$user,
+               'pass=s' => \$password,
+               'help'  => sub {usage},
+               'server=s' => \$host,
+               'recursive' => \$recursive,
+               'port=i' => \$port,
+		       'passive=i' => \$passive,
+		       'debug=i'   => \$debug,
+			   'binary=i'  => \$binary,
+			   'localdir=s' => \$localdir);
 
 	my %config = (
-		server	 =>  "localhost",
-		user	 =>  "chrisbra",
-		pass	 =>  "b97urlington",
-		passive	 =>	 "1",
-		debug	 =>	 "1",
-		binary	 =>	 "1",
-		localdir =>   "~/perl_backup"
+		server	 =>  $host,
+		user	 =>  $user,
+		pass	 =>  $password,
+		passive	 =>	 $passive,
+		debug	 =>	 $debug,
+		binary	 =>	 $binary,
+		localdir =>  $localdir
 	);
+	#my %config = (
+	#	server	 =>  "localhost",
+	#	user	 =>  "chrisbra",
+	#	pass	 =>  "b97urlington",
+	#	passive	 =>	 "1",
+	#	debug	 =>	 "1",
+	#	binary	 =>	 "1",
+	#	localdir =>   "~/perl_backup"
+	#);
 	$config{"localdir"}=glob($config{"localdir"});
 
 	return %config;
