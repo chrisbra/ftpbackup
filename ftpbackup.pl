@@ -216,7 +216,7 @@ sub vprint {#{{{
 	}
 }#}}}
 
-sub deltree {
+sub deltree {#{{{
 	my $dir = shift;
 	local *DIR;
 	opendir DIR, $dir or die "[error]: Cannot open $dir: $!";
@@ -229,7 +229,7 @@ sub deltree {
 	closedir DIR;
 	rmdir $dir;
 	return(0);
-}
+}#}}}
 
 
-# vim: set fm=marker
+# vim: set fm=marker fl=0
