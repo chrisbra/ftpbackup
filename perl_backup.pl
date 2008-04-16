@@ -9,6 +9,8 @@ use Net::FTP;
 use Getopt::Long;
 use Config;
 use GnuPG;
+# create temporary files
+use File::Temp;
 
 # Function prototypes
 sub usage;
@@ -19,6 +21,7 @@ sub FTPlist;
 sub FTPinitLocal;
 sub FTPcheckOldVers;
 sub FTPgetFiles;
+sub deltree;
 
 
 my %config = getConfig();
@@ -33,11 +36,9 @@ my $backup_dir = FTPinitLocal(\%config);
 vprint(\%config, "Backing up into Directory: $backup_dir", "debug");
 
 @temp = FTPlist($ftp, $config{'dir'});
-#foreach (@temp){
-#	print "$_\n";
-#}
 chdir $backup_dir;
 FTPgetFiles($ftp, \@temp, ".", \%config);
+$ftp->quit;
 
 
 sub FTPgetFiles {#{{{
@@ -46,14 +47,11 @@ sub FTPgetFiles {#{{{
 	chdir $ldir;
 	$ftp->cwd($ldir);
 	my $status;
-#	$list =~ s/(\S*)$/$1/g;
-#	print @$list[0];
 	foreach (@$list){
 		my @files = split / +/, $_, 9;
 		if ($_ =~ /^d/){
 			vprint($config, "Downloading directory $files[8]", "debug");
 			my @temp = $ftp->dir($files[8]);
-			#print "$_\n" foreach (@temp);
 			FTPgetFiles($ftp, \@temp, $files[8], $config);
 		}
 		else {
@@ -61,10 +59,6 @@ sub FTPgetFiles {#{{{
 			$status = $ftp->get($files[8]); 
 			vprint($config, "Could not download $files[8]", "warn") unless (defined($status));
 		}
-		#print "@files[8]\n";
-		#	s/^.*\s(\S+)$/$1/;
-		#print "$_\n";
-#		ftp->get($file, $ldir . $config->{"ospath"} . $file);
 	}
 	chdir ".." && $ftp->cdup();
 	return(0);
@@ -137,15 +131,15 @@ sub FTPinitLocal{#{{{
 sub FTPcheckOldVers{#{{{
 	my $temp   = shift;
 	my $config = shift;
-	if (@temp > $config{'keep'}){
+	if (@temp >= $config{'keep'}){
 		 # Determine the oldest entries to delete
 		 # sort reverse by mtime
 		 @temp = sort {(stat($a))[9] <=> (stat($b))[9]} @temp;
-		 while (@temp > $config{'keep'}){
+		 while (@temp >= $config{'keep'}){
 			 vprint(\%config, "Deleting file $temp[0]", "debug");
 			 eval{
-				 unlink glob($temp[0].$config{'ospath'}."*");
-				 rmdir shift(@temp);
+				 deltree $temp[0];
+				 shift(@temp);
 			 };
 			 if ($@){
 				 die "Could not delete: $!";
@@ -221,3 +215,21 @@ sub vprint {#{{{
 		print "[$facility] $msg\n";
 	}
 }#}}}
+
+sub deltree {
+	my $dir = shift;
+	local *DIR;
+	opendir DIR, $dir or die "[error]: Cannot open $dir: $!";
+	foreach (readdir DIR) {
+		next if /^\.{1,2}$/;
+		my $name = "$dir/$_";
+		deltree $name if ( -d $name );
+		unlink $name;
+	}
+	closedir DIR;
+	rmdir $dir;
+	return(0);
+}
+
+
+# vim: set fm=marker
