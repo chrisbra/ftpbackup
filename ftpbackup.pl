@@ -96,17 +96,22 @@ sub FTPlist{#{{{
 sub usage{#{{{
     chomp(my $name=`basename $0`);
     print <<EOF;
-Usage: $name [OPTION]
+Usage: $name [OPTION] ftp://server/directory
 $name takes an FTP account and recursively downloads all
 files. This can be helpful for automatic backups.
 
 Option:
--u --user=<username>       IMAP Server User
--p --pass=<password>       IMAP Server Password
--s --server                IMAP Server
---port                     IMAP Server Port
+-u --user=<username>       FTP Server User
+-p --pass=<password>       FTP Server Password
+-s --server                FTP Server
+--port                     FTP Server Port
 --recursive                recursively calculate size
 -h --help
+
+For example:
+$name ftp://ftp.eu.kernel.org/pub/ 
+would download all files below pub from the kernel mirror. 
+(Don't actually try this!)
 EOF
      exit(1);
 }#}}}
@@ -155,7 +160,7 @@ sub getConfig(){#{{{
     # Default Options, these can be overruled
     # using commandline optins
 	my $user		 = "anonymous";
-	my $password	 = 'none@none.org';
+	my $password	 = 'none@none.invalid';
 	my $host		 = "localhost";
 	my $localdir	 = "~/perl_backup";
 	# FTP control port
@@ -191,6 +196,20 @@ sub getConfig(){#{{{
 			   'binary=i'  => \$binary,
 			   'dir=s'	   => \$dir,
 			   'localdir=s' => \$localdir);
+
+	if (defined(@ARGV)){
+		my $uri		 = shift(@ARGV);
+		# now we have 4 fields: 1: ftp:/
+		#                       2: <null>
+		#                       3: server
+		#                       4: directory
+		my @a_uri	 = split /\//,$uri, 4;
+		$host        = $a_uri[2];
+		if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
+			$dir		 = $a_uri[3];
+		}
+	}
+#	exit(0);
 
 	my %config = (
 		server	 =>  $host,
@@ -232,4 +251,4 @@ sub deltree {#{{{
 }#}}}
 
 
-# vim: set fm=marker fl=0
+# vim: set fdm=marker fdl=0:
