@@ -33,12 +33,13 @@ my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
 FTPcheckOldVers(\@temp, \%config);
 
 my $backup_dir = FTPinitLocal(\%config);
-vprint(\%config, "Backing up into Directory: $backup_dir", "debug");
+vprint(\%config, "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
-unless (FTPgetFiles($ftp, \@temp, ".", \%config)){
-	print "Error orrcured, aborting\n";
+#FTPgetFiles($ftp, \@temp, ".", \%config);
+unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
+	vprint(\%config, "Error occured, aborting.", "debug");
 	$ftp->quit;
 	exit(1);
 }
@@ -49,9 +50,12 @@ sub FTPgetFiles {#{{{
 	(my $ftp, my $list, my $ldir, my $config) = @_;
 	mkdir $ldir unless -d $ldir;
 	chdir $ldir;
-	unless ($ftp->cwd($ldir)){
-		vprint($config, "Could not enter directory: $ldir", "warn");
-		return(0);
+	foreach ( split /$config{'ospath'}/, $ldir){
+		vprint($config, "Enter directory: $_", "debug");
+		if ( not $ftp->cwd($_)) {
+			vprint($config, "Could not enter directory: $_", "error");
+			return(0);
+		}
 	}
 	my $status;
 	foreach (@$list){
@@ -59,16 +63,16 @@ sub FTPgetFiles {#{{{
 		if ($_ =~ /^d/){
 			vprint($config, "Downloading directory $files[8]", "debug");
 			my @temp = $ftp->dir($files[8]);
-			return(0) unless (FTPgetFiles($ftp, \@temp, $files[8], $config));
+			$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
 		}
 		else {
 			vprint($config, "Downloading file $files[8] $!", "debug");
 			$status = $ftp->get($files[8]); 
-			vprint($config, "Could not download $files[8] $!", "warn") unless (defined($status));
+			vprint($config, "Could not download $files[8] $!", "error") unless (defined($status));
 		}
 	}
 	chdir ".." && $ftp->cdup();
-	return(0);
+	return($status);
 }#}}}
 
 sub FTPinit {#{{{
@@ -83,7 +87,7 @@ sub FTPinit {#{{{
 	}
 	# Check local Backup Directory
 	eval { 
-		mkdir $config->{"localdir"},0700 unless (-d $config->{"localdir"}); 
+		mkdir $config->{"localdir"} unless (-d $config->{"localdir"}); 
 		chmod 0700, $config->{"localdir"} unless (-w $config->{"localdir"});
 	};
 	if ($@) {
@@ -131,13 +135,19 @@ sub FTPinitLocal{#{{{
 	# Test for existance of directory
 	my $dir = $year+1900 . sprintf("%02d",$mon+1) . $mday;
 	if (-d $config{"localdir"} . $config{"ospath"}.$dir) {
-		vprint($config, "Directory \'$dir\' already exists in $config{'localdir'}", "debug");
+		vprint($config, "Directory '$dir' already exists in $config{'localdir'}", "debug");
 	}
 	else {
-		mkdir $config{"localdir"} . $config{"ospath"} . $dir, 0700 ||
-		print "Cannot create Directory $dir in $config{'localdir'}.\n";
+		mkdir $config{"localdir"} . $config{"ospath"} . $dir ||
+		vprint($config,"Cannot create Directory $dir in $config{'localdir'}.", "error");
 	}
-	return $config{"localdir"} . $config{"ospath"} . $dir;
+	chdir $config{"localdir"} . $config{"ospath"} . $dir;
+	vprint($config, "Creating directory $config{'server'} in $dir", "debug");
+	unless ( -d $config{"server"}){
+		vprint($config, "Creating directory $config{'server'} in $dir", "debug");
+		mkdir $config{"server"} || print "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
+	 }
+	return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
 }#}}}
 
 sub FTPcheckOldVers{#{{{
