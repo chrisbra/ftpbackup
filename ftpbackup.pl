@@ -37,7 +37,6 @@ vprint(\%config, "Backing up $config{'dir'} into Directory: $backup_dir", "debug
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
-#FTPgetFiles($ftp, \@temp, ".", \%config);
 unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
 	vprint(\%config, "Error occured, aborting.", "debug");
 	$ftp->quit;
@@ -57,22 +56,29 @@ sub FTPgetFiles {#{{{
 			return(0);
 		}
 	}
-	my $status;
+	my $status = 0;
 	LIST: foreach (@$list){
 		my $skip = 0;
 		my $xpattern;
 		my @files = split / +/, $_, 9;
+		# Skip files/directories that match exclude pattern
 		foreach $xpattern (@{$config{'exclude'}}){
 			 if ($files[8] =~ /$xpattern/) {
 				 vprint($config, "Skipping File $files[8] because it matches exclude pattern", "debug"); 
 				 last LIST;
 			 }
 		 }
-		if ($_ =~ /^d/){
+		# Recursive download for directories, if configured
+		if (/^d/){
+			if (not $config{'recursive'}) {
+				vprint($config, "Skipping directory $files[8]", "debug");
+				next LIST;
+			}
 			vprint($config, "Downloading directory $files[8]", "debug");
 			my @temp = $ftp->dir($files[8]);
 			$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
 		}
+		# download files
 		else {
 			vprint($config, "Downloading file $files[8] $!", "debug");
 			$status = $ftp->get($files[8]); 
@@ -123,7 +129,7 @@ Option:
 -u --user=<username>   FTP Server User
 -p --pass=<password>   FTP Server Password
 --port                 FTP Server Port
---recursive            recursively calculate size
+--[no]recursive        enable/disable recursive download
 -h --help			   This screen
 --exclude='pattern'    Use an exclude pattern. Pattern 
 					   is matched as regular expression.
@@ -216,13 +222,19 @@ sub getConfig(){#{{{
                'pass=s' => \$password,
                'help'  => sub {usage},
                'server=s' => \$host,
-               'recursive' => \$recursive,
+               'recursive!' => \$recursive,
                'port=i' => \$port,
 		       'passive=i' => \$passive,
 		       'debug=i'   => \$debug,
 			   'binary=i'  => \$binary,
 			   'exclude=s' => \@exclude,
 			   'localdir=s' => \$localdir);
+	if ($recursive) {
+		print "recursive\n";
+	}
+	else {
+		print "non-recursive\n";
+	}
 
 	if (defined(@ARGV)){
 		my $uri		 = shift(@ARGV);
