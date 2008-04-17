@@ -58,8 +58,16 @@ sub FTPgetFiles {#{{{
 		}
 	}
 	my $status;
-	foreach (@$list){
+	LIST: foreach (@$list){
+		my $skip = 0;
+		my $xpattern;
 		my @files = split / +/, $_, 9;
+		foreach $xpattern (@{$config{'exclude'}}){
+			 if ($files[8] =~ /$xpattern/) {
+				 vprint($config, "Skipping File $files[8] because it matches exclude pattern", "debug"); 
+				 last LIST;
+			 }
+		 }
 		if ($_ =~ /^d/){
 			vprint($config, "Downloading directory $files[8]", "debug");
 			my @temp = $ftp->dir($files[8]);
@@ -197,7 +205,7 @@ sub getConfig(){#{{{
 	my $dir			 = ".";
 
 	# exclude patterns
-	my $exclude;
+	my @exclude		 = ();
 
 	# Operating System specific
 	my $ospath  = ($Config{"osname"} =~ "MsWin" ) ? '\\' : '/';
@@ -212,6 +220,7 @@ sub getConfig(){#{{{
 		       'debug=i'   => \$debug,
 			   'binary=i'  => \$binary,
 			   'dir=s'	   => \$dir,
+			   'exclude=s' => \@exclude,
 			   'localdir=s' => \$localdir);
 
 	if (defined(@ARGV)){
@@ -226,7 +235,7 @@ sub getConfig(){#{{{
 			$dir		 = $a_uri[3];
 		}
 	}
-#	exit(0);
+
 
 	my %config = (
 		server	 =>  $host,
@@ -238,6 +247,7 @@ sub getConfig(){#{{{
 		localdir =>  $localdir,
 		ospath   =>  $ospath,
 		keep	 =>	 $keep,
+		exclude  =>  \@exclude,
 		dir		 =>  $dir
 	);
 	$config{"localdir"}=glob($config{"localdir"});
