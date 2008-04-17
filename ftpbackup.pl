@@ -120,12 +120,14 @@ $name takes an FTP account and recursively downloads all
 files. This can be helpful for automatic backups.
 
 Option:
--u --user=<username>       FTP Server User
--p --pass=<password>       FTP Server Password
--s --server                FTP Server
---port                     FTP Server Port
---recursive                recursively calculate size
--h --help
+-u --user=<username>   FTP Server User
+-p --pass=<password>   FTP Server Password
+--port                 FTP Server Port
+--recursive            recursively calculate size
+-h --help			   This screen
+--exclude='pattern'    Use an exclude pattern. Pattern 
+					   is matched as regular expression.
+					   You may use this option several times.
 
 For example:
 $name ftp://ftp.eu.kernel.org/pub/ 
