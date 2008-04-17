@@ -37,7 +37,11 @@ vprint(\%config, "Backing up into Directory: $backup_dir", "debug");
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
-FTPgetFiles($ftp, \@temp, ".", \%config);
+unless (FTPgetFiles($ftp, \@temp, ".", \%config)){
+	print "Error orrcured, aborting\n";
+	$ftp->quit;
+	exit(1);
+}
 $ftp->quit;
 
 
@@ -45,19 +49,22 @@ sub FTPgetFiles {#{{{
 	(my $ftp, my $list, my $ldir, my $config) = @_;
 	mkdir $ldir unless -d $ldir;
 	chdir $ldir;
-	$ftp->cwd($ldir);
+	unless ($ftp->cwd($ldir)){
+		vprint($config, "Could not enter directory: $ldir", "warn");
+		return(0);
+	}
 	my $status;
 	foreach (@$list){
 		my @files = split / +/, $_, 9;
 		if ($_ =~ /^d/){
 			vprint($config, "Downloading directory $files[8]", "debug");
 			my @temp = $ftp->dir($files[8]);
-			FTPgetFiles($ftp, \@temp, $files[8], $config);
+			return(0) unless (FTPgetFiles($ftp, \@temp, $files[8], $config));
 		}
 		else {
-			vprint($config, "Downloading file $files[8]", "debug");
+			vprint($config, "Downloading file $files[8] $!", "debug");
 			$status = $ftp->get($files[8]); 
-			vprint($config, "Could not download $files[8]", "warn") unless (defined($status));
+			vprint($config, "Could not download $files[8] $!", "warn") unless (defined($status));
 		}
 	}
 	chdir ".." && $ftp->cdup();
