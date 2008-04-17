@@ -56,7 +56,7 @@ sub FTPgetFiles {#{{{
 			return(0);
 		}
 	}
-	my $status = 0;
+	my $status=1;
 	LIST: foreach (@$list){
 		my $skip = 0;
 		my $xpattern;
