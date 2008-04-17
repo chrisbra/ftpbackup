@@ -91,7 +91,8 @@ sub FTPgetFiles {#{{{
 
 sub FTPinit {#{{{
 	my $config = shift;
-	my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"passive"}) or die "[error] Cannot connect to $config->{'server'}";
+	# This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
+	my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"active"}) or die "[error] Cannot connect to $config->{'server'}";
 	vprint($config, "successfull logged into Server $config->{'server'}", "debug");
 	$ftp->login($config->{"user"}, $config->{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
 	 # enable binary mode, if configured
@@ -131,6 +132,7 @@ Option:
 --port                 FTP Server Port
 --[no]recursive        enable/disable recursive download
 -h --help			   This screen
+--active               use active mode (passive=default)
 --exclude='pattern'    Use an exclude pattern. Pattern 
 					   is matched as regular expression.
 					   You may use this option several times.
@@ -198,12 +200,12 @@ sub getConfig(){#{{{
 	my $localdir	 = "~/perl_backup";
 	# FTP control port
 	my $port		 = 21;
-	# Enable Passive mode? 1 enables, 0 disables
-	my $passive      = 1;
+	# Enable active mode? 1 enables, 0 disables
+	my $active       = 0;
 	# Enable Recurisve mode? 1 enables, 0 disables
 	my $recursive    = 1;
 	# Enable Debug mode? 1 enables, 0 disables
-	my $debug		 = '';
+	my $debug		 = 0;
 	# Enable binary mode? 1 enables, 0 disables
 	my $binary		 = 1;
 	# Wieviele Versionen behalten:
@@ -218,17 +220,17 @@ sub getConfig(){#{{{
 	# Operating System specific
 	my $ospath  = ($Config{"osname"} =~ "MsWin" ) ? '\\' : '/';
 
-	GetOptions('user=s' => \$user,
-               'pass=s' => \$password,
-               'help'  => sub {usage},
-               'server=s' => \$host,
-               'recursive!' => \$recursive,
-               'port=i' => \$port,
-		       'passive=i' => \$passive,
-		       'debug=i'   => \$debug,
+	GetOptions('user=s'    => \$user,
+               'pass=s'    => \$password,
+               'help'      => sub {usage},
+               'server=s'  => \$host,
+               'recursive!'=> \$recursive,
+               'port=i'    => \$port,
+		       'active'    => \$active,
+		       'debug'     => \$debug,
 			   'binary=i'  => \$binary,
 			   'exclude=s' => \@exclude,
-			   'localdir=s' => \$localdir);
+			   'localdir=s'=> \$localdir);
 
 	if (defined(@ARGV)){
 		my $uri		 = shift(@ARGV);
@@ -248,7 +250,7 @@ sub getConfig(){#{{{
 		server	 =>  $host,
 		user	 =>  $user,
 		pass	 =>  $password,
-		passive	 =>	 $passive,
+		active	 =>	 $active,
 		debug	 =>	 $debug,
 		binary	 =>	 $binary,
 		localdir =>  $localdir,
