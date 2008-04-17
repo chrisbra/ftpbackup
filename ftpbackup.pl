@@ -26,7 +26,7 @@ sub deltree;
 
 my %config = getConfig();
 
-vprint(\%config,"Server: $config{'server'}", "debug");
+vprint(\%config,"Loggin into Server: $config{'server'} as $config{'user'}", "debug");
 my $ftp=FTPinit(\%config);
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
@@ -85,9 +85,9 @@ sub FTPgetFiles {#{{{
 
 sub FTPinit {#{{{
 	my $config = shift;
-	my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"passive"}) or die "Cannot connect to $config->{'server'}";
+	my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"passive"}) or die "[error] Cannot connect to $config->{'server'}";
 	vprint($config, "successfull logged into Server $config->{'server'}", "debug");
-	$ftp->login($config->{"user"}, $config->{"pass"}) or die "Cannot login\n Are Password and Username correct?";
+	$ftp->login($config->{"user"}, $config->{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
 	 # enable binary mode, if configured
 	if($config{"binary"}){
 		$ftp->binary;
@@ -99,7 +99,7 @@ sub FTPinit {#{{{
 		chmod 0700, $config->{"localdir"} unless (-w $config->{"localdir"});
 	};
 	if ($@) {
-		die "Error, setting up Backup Directory $config->{'localdir'}, exiting..."
+		die "[error] Setting up Backup Directory $config->{'localdir'}, exiting..."
 	}
 	else { 
 		vprint($config, "$config->{'localdir'} looks alright", "debug"); 
@@ -174,7 +174,7 @@ sub FTPcheckOldVers{#{{{
 				 shift(@temp);
 			 };
 			 if ($@){
-				 die "Could not delete: $!";
+				 die "[error] Could not delete: $!";
 			 }
 		 }
 		
@@ -221,7 +221,6 @@ sub getConfig(){#{{{
 		       'passive=i' => \$passive,
 		       'debug=i'   => \$debug,
 			   'binary=i'  => \$binary,
-			   'dir=s'	   => \$dir,
 			   'exclude=s' => \@exclude,
 			   'localdir=s' => \$localdir);
 
