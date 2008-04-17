@@ -203,7 +203,7 @@ sub getConfig(){#{{{
 	# Enable Recurisve mode? 1 enables, 0 disables
 	my $recursive    = 1;
 	# Enable Debug mode? 1 enables, 0 disables
-	my $debug		 = 1;
+	my $debug		 = '';
 	# Enable binary mode? 1 enables, 0 disables
 	my $binary		 = 1;
 	# Wieviele Versionen behalten:
@@ -229,12 +229,6 @@ sub getConfig(){#{{{
 			   'binary=i'  => \$binary,
 			   'exclude=s' => \@exclude,
 			   'localdir=s' => \$localdir);
-	if ($recursive) {
-		print "recursive\n";
-	}
-	else {
-		print "non-recursive\n";
-	}
 
 	if (defined(@ARGV)){
 		my $uri		 = shift(@ARGV);
