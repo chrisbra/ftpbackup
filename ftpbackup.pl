@@ -22,6 +22,7 @@ sub FTPinitLocal;
 sub FTPcheckOldVers;
 sub FTPgetFiles;
 sub deltree;
+sub printStats;
 
 
 my %config = getConfig();
@@ -43,6 +44,8 @@ unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
 	exit(1);
 }
 $ftp->quit;
+printStats if $config{'stats'};
+#printf("%s stats: %i\n", $config{'stats'}? "enabled" : "disabled", $config{'stats'});
 
 
 sub FTPgetFiles {#{{{
@@ -70,17 +73,21 @@ sub FTPgetFiles {#{{{
 		 }
 		# Recursive download for directories, if configured
 		if (/^d/){
-			if (not $config{'recursive'}) {
+			unless ($config{'recursive'}) {
 				vprint($config, "Skipping directory $files[8]", "debug");
 				next LIST;
 			}
 			vprint($config, "Downloading directory $files[8]", "debug");
+#			print "dir: %{$config->{'statistics'}}->{'dirs'}\n";
+			$config->{'statistics'}->{'dirs'}+=1;
 			my @temp = $ftp->dir($files[8]);
 			$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
 		}
 		# download files
 		else {
 			vprint($config, "Downloading file $files[8] $!", "debug");
+			$config->{'statistics'}->{'files'}+=1;
+			$config->{'statistics'}->{'size'}+=$files[4];
 			$status = $ftp->get($files[8]); 
 			vprint($config, "Could not download $files[8] $!", "error") unless (defined($status));
 		}
@@ -123,24 +130,30 @@ sub usage{#{{{
     chomp(my $name=`basename $0`);
     print <<EOF;
 Usage: $name [OPTION] ftp://server/directory
-$name takes an FTP account and recursively downloads all
-files. This can be helpful for automatic backups.
+$name takes an FTP account and recursively downloads all files. This can
+be helpful for automatic backups. By default, it will save all files in
+the current directory below a directory YYYYMMDD/hostname.
+If no username is given, $name tries to use anonymous login.
 
 Option:
+-h --help			   This screen
 -u --user=<username>   FTP Server User
 -p --pass=<password>   FTP Server Password
 --port                 FTP Server Port
---[no]recursive        enable/disable recursive download
--h --help			   This screen
+--[no]recursive        (do not) download recursively
 --active               use active mode (passive=default)
---exclude='pattern'    Use an exclude pattern. Pattern 
-					   is matched as regular expression.
-					   You may use this option several times.
+--statistics           Print download statistics when finished.
+--archivedir=dir       Save downloaded files in dir (default: current 
+					   directory)
+--exclude='pattern'    Use an exclude pattern. Pattern  is matched
+					   as regular expression. You may use this option 
+					   several times.
 
 For example:
-$name ftp://ftp.eu.kernel.org/pub/ 
-would download all files below pub from the kernel mirror. 
-(Don't actually try this!)
+$name --statistics  ftp://ftp.eu.kernel.org/pub/ 
+would download all files below pub from the kernel mirror and save them in
+the current directory below YYYYYMMDD/ftp.eu.kernel.org/. When finished it
+will print a nice little statistic.
 EOF
      exit(1);
 }#}}}
@@ -197,13 +210,16 @@ sub getConfig(){#{{{
 	my $user		 = "anonymous";
 	my $password	 = 'none@none.invalid';
 	my $host		 = "localhost";
-	my $localdir	 = "~/perl_backup";
+	my $localdir	 = ".";
 	# FTP control port
 	my $port		 = 21;
 	# Enable active mode? 1 enables, 0 disables
 	my $active       = 0;
+	# disable statistics
+	my $stats		 = 0;
 	# Enable Recurisve mode? 1 enables, 0 disables
 	my $recursive    = 1;
+	#printf("%s recursion\n", $recursive? "enabled" : "disabled");
 	# Enable Debug mode? 1 enables, 0 disables
 	my $debug		 = 0;
 	# Enable binary mode? 1 enables, 0 disables
@@ -211,7 +227,7 @@ sub getConfig(){#{{{
 	# Wieviele Versionen behalten:
 	my $keep		 = 3;
 
-	# Welches Directory?
+	# Welches Directory downloaden
 	my $dir			 = ".";
 
 	# exclude patterns
@@ -220,19 +236,28 @@ sub getConfig(){#{{{
 	# Operating System specific
 	my $ospath  = ($Config{"osname"} =~ "MsWin" ) ? '\\' : '/';
 
-	GetOptions('user=s'    => \$user,
+	# Statistics Hash
+	my %statistics  =  (
+		stime	 => time,
+		files	 => 0,
+		dirs	 => 0,
+		size     => 0
+	);
+
+	GetOptions('user=s'    => \$user,#{{{
                'pass=s'    => \$password,
                'help'      => sub {usage},
                'server=s'  => \$host,
-               'recursive!'=> \$recursive,
+               'recursion!'=> \$recursive,
                'port=i'    => \$port,
 		       'active'    => \$active,
 		       'debug'     => \$debug,
-			   'binary=i'  => \$binary,
-			   'exclude=s' => \@exclude,
-			   'localdir=s'=> \$localdir);
+			   'statistics'=> \$stats,
+			   'binary'    => \$binary,
+			   'archivedir=s' => \$localdir,
+			   'exclude=s' => \@exclude);#}}}
 
-	if (defined(@ARGV)){
+	if (defined(@ARGV)){#{{{
 		my $uri		 = shift(@ARGV);
 		# now we have 4 fields: 1: ftp:/
 		#                       2: <null>
@@ -243,20 +268,24 @@ sub getConfig(){#{{{
 		if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
 			$dir		 = $a_uri[3];
 		}
-	}
+	}#}}}
 
 
 	my %config = (
-		server	 =>  $host,
 		user	 =>  $user,
 		pass	 =>  $password,
+		server	 =>  $host,
+		localdir =>  $localdir,
+		port     =>  $port,
 		active	 =>	 $active,
+		stats    =>  $stats,
+		recursive => $recursive,
 		debug	 =>	 $debug,
 		binary	 =>	 $binary,
-		localdir =>  $localdir,
-		ospath   =>  $ospath,
 		keep	 =>	 $keep,
+		ospath   =>  $ospath,
 		exclude  =>  \@exclude,
+		statistics => \%statistics,
 		dir		 =>  $dir
 	);
 	$config{"localdir"}=glob($config{"localdir"});
@@ -269,6 +298,55 @@ sub vprint {#{{{
 	if ($config->{"debug"}) {
 		print "[$facility] $msg\n";
 	}
+}#}}}
+
+sub printStats {#{{{
+	my ($config) = @_;
+	my %stat= %{$config{'statistics'}};
+	$stat{'etime'} = time;
+	my $duration   = $stat{'etime'} - $stat{'stime'};
+	my $bandwidth  = ($duration == 0) ? $stat{'size'} : sprintf("%02d", $stat{'size'} / $duration);
+	my $bandwith   = 0;
+	my $time_unit  = "sec";
+	my $size_unit  = "bytes";
+	if ($duration >= 3600*24){
+		$duration  = sprintf("%02d", $duration/(3600*24));
+		$time_unit = 'days';
+	}
+	elsif ($duration >= 3600) {
+		$duration  = sprintf("%02d", $duration/3600);
+		$time_unit = 'hours';
+	}
+	elsif ($duration >= 60) {
+		$duration  = sprintf("%02d", $duration/60);
+		$time_unit = 'minutes';
+	}
+	# Gigabytes
+	if ($stat{'size'} >= 1024*1024*1024){
+		$stat{'size'}  = sprintf("%02d", $stat{'size'}/(1024*1024*1024));
+		$size_unit     = "GB";
+	}
+	# Megabytes
+	elsif ($stat{'size'} >= 1024*1024){
+		$stat{'size'}  = sprintf("%02d", $stat{'size'}/(1024*1024));
+		$size_unit       = "MB";
+	}
+	# Kilobytes
+	elsif ($stat{'size'} >= 1024){
+		$stat{'size'}  = sprintf("%02d", $stat{'size'}/1024);
+		$size_unit       = "kB";
+	}
+
+	print "\nDownload Summary:\n";
+	print "=" x 70;
+	print "\n";
+	print "Files:\t\t$stat{'files'}\n";
+	print "Folder:\t\t$stat{'dirs'}\n";
+	print "Duration: \t$duration $time_unit\n";
+	print "Transfered: \t$stat{'size'} $size_unit\n";
+	print "Bandwith: \t$bandwidth bytes/s\n"; 
+	print "=" x 70;
+	print "\n\n";
 }#}}}
 
 sub deltree {#{{{
@@ -285,6 +363,5 @@ sub deltree {#{{{
 	rmdir $dir;
 	return(0);
 }#}}}
-
 
 # vim: set fdm=marker fdl=0:
