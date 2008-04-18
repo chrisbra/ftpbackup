@@ -5,12 +5,19 @@
 
 use strict;
 use warnings;
+# obviously we need a ftp module
 use Net::FTP;
+# commandline parsing
 use Getopt::Long;
+# access perl-variables
 use Config;
-use GnuPG;
+# read from terminal (e.g. password)
+use Term::ReadKey;
+# not yet needed
+#
+#use GnuPG;
 # create temporary files
-use File::Temp;
+#use File::Temp;
 
 # Function prototypes
 sub usage;
@@ -24,22 +31,25 @@ sub FTPgetFiles;
 sub deltree;
 sub printStats;
 
+our %config = getConfig();
 
-my %config = getConfig();
-
-vprint(\%config,"Loggin into Server: $config{'server'} as $config{'user'}", "debug");
-my $ftp=FTPinit(\%config);
+vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
+#my $ftp=FTPinit(\%config);
+my $ftp=FTPinit();
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
 FTPcheckOldVers(\@temp, \%config);
+FTPcheckOldVers(\@temp);
 
-my $backup_dir = FTPinitLocal(\%config);
-vprint(\%config, "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
+#my $backup_dir = FTPinitLocal(\%config);
+my $backup_dir = FTPinitLocal();
+vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
-unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
-	vprint(\%config, "Error occured, aborting.", "debug");
+#unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
+unless (FTPgetFiles($ftp, \@temp, $config{'dir'} )){
+	vprint( "Error occured, aborting.", "debug");
 	$ftp->quit;
 	exit(1);
 }
@@ -49,13 +59,14 @@ printStats if $config{'stats'};
 
 
 sub FTPgetFiles {#{{{
-	(my $ftp, my $list, my $ldir, my $config) = @_;
+	#(my $ftp, my $list, my $ldir, my $config) = @_;
+	(my $ftp, my $list, my $ldir) = @_;
 	mkdir $ldir unless -d $ldir;
 	chdir $ldir;
 	foreach ( split /$config{'ospath'}/, $ldir){
-		vprint($config, "Enter directory: $_", "debug");
+		vprint( "Enter directory: $_", "debug");
 		if ( not $ftp->cwd($_)) {
-			vprint($config, "Could not enter directory: $_", "error");
+			vprint( "Could not enter directory: $_", "error");
 			return(0);
 		}
 	}
@@ -67,29 +78,33 @@ sub FTPgetFiles {#{{{
 		# Skip files/directories that match exclude pattern
 		foreach $xpattern (@{$config{'exclude'}}){
 			 if ($files[8] =~ /$xpattern/) {
-				 vprint($config, "Skipping File $files[8] because it matches exclude pattern", "debug"); 
+				 vprint( "Skipping File $files[8] because it matches exclude pattern", "debug"); 
 				 last LIST;
 			 }
 		 }
 		# Recursive download for directories, if configured
 		if (/^d/){
 			unless ($config{'recursive'}) {
-				vprint($config, "Skipping directory $files[8]", "debug");
+				vprint( "Skipping directory $files[8]", "debug");
 				next LIST;
 			}
-			vprint($config, "Downloading directory $files[8]", "debug");
+			vprint( "Downloading directory $files[8]", "debug");
 #			print "dir: %{$config->{'statistics'}}->{'dirs'}\n";
-			$config->{'statistics'}->{'dirs'}+=1;
+			#$config->{'statistics'}->{'dirs'}+=1;
+			$config{'statistics'}->{'dirs'}+=1;
 			my @temp = $ftp->dir($files[8]);
-			$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
+			#$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
+			$status = FTPgetFiles($ftp, \@temp, $files[8]);
 		}
 		# download files
 		else {
-			vprint($config, "Downloading file $files[8] $!", "debug");
-			$config->{'statistics'}->{'files'}+=1;
-			$config->{'statistics'}->{'size'}+=$files[4];
+			vprint( "Downloading file $files[8] $!", "debug");
+			#$config->{'statistics'}->{'files'}+=1;
+			#$config->{'statistics'}->{'size'}+=$files[4];
+			$config{'statistics'}->{'files'}+=1;
+			$config{'statistics'}->{'size'}+=$files[4];
 			$status = $ftp->get($files[8]); 
-			vprint($config, "Could not download $files[8] $!", "error") unless (defined($status));
+			vprint("Could not download $files[8] $!", "error") unless (defined($status));
 		}
 	}
 	chdir ".." && $ftp->cdup();
@@ -97,26 +112,31 @@ sub FTPgetFiles {#{{{
 }#}}}
 
 sub FTPinit {#{{{
-	my $config = shift;
+#	my $config = shift;
 	# This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
-	my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"active"}) or die "[error] Cannot connect to $config->{'server'}";
-	vprint($config, "successfull logged into Server $config->{'server'}", "debug");
-	$ftp->login($config->{"user"}, $config->{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
+	#my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"active"}) or die "[error] Cannot connect to $config->{'server'}";
+	my $ftp = Net::FTP->new($config{"server"}, Passive => $config{"active"}) or die "[error] Cannot connect to $config{'server'}";
+	vprint( "successfull logged into Server $config{'server'}", "debug");
+	#$ftp->login($config->{"user"}, $config->{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
+	$ftp->login($config{"user"}, $config{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
 	 # enable binary mode, if configured
 	if($config{"binary"}){
 		$ftp->binary;
-		vprint($config, "Changed connection to binary mode", "debug");
+		vprint( "Changed connection to binary mode", "debug");
 	}
 	# Check local Backup Directory
 	eval { 
-		mkdir $config->{"localdir"} unless (-d $config->{"localdir"}); 
-		chmod 0700, $config->{"localdir"} unless (-w $config->{"localdir"});
+		#mkdir $config->{"localdir"} unless (-d $config->{"localdir"}); 
+		mkdir $config{"localdir"} unless (-d $config{"localdir"}); 
+		#chmod 0700, $config->{"localdir"} unless (-w $config->{"localdir"});
+		chmod 0700, $config{"localdir"} unless (-w $config{"localdir"});
 	};
 	if ($@) {
-		die "[error] Setting up Backup Directory $config->{'localdir'}, exiting..."
+		#	die "[error] Setting up Backup Directory $config->{'localdir'}, exiting..."
+		die "[error] Setting up Backup Directory $config{'localdir'}, exiting..."
 	}
 	else { 
-		vprint($config, "$config->{'localdir'} looks alright", "debug"); 
+		vprint( "$config{'localdir'} looks alright", "debug"); 
 	}
 	return $ftp;
 }#}}}
@@ -140,6 +160,7 @@ Option:
 -u --user=<username>   FTP Server User
 -p --pass=<password>   FTP Server Password
 --port                 FTP Server Port
+-d --debug             for debugging $name
 --[no]recursive        (do not) download recursively
 --active               use active mode (passive=default)
 --statistics           Print download statistics when finished.
@@ -166,14 +187,14 @@ sub FTPinitLocal{#{{{
 	# Test for existance of directory
 	my $dir = $year+1900 . sprintf("%02d",$mon+1) . $mday;
 	if (-d $config{"localdir"} . $config{"ospath"}.$dir) {
-		vprint($config, "Directory '$dir' already exists in $config{'localdir'}", "debug");
+		vprint( "Directory '$dir' already exists in $config{'localdir'}", "debug");
 	}
 	else {
 		mkdir $config{"localdir"} . $config{"ospath"} . $dir ||
-		vprint($config,"Cannot create Directory $dir in $config{'localdir'}.", "error");
+		vprint("Cannot create Directory $dir in $config{'localdir'}.", "error");
 	}
 	chdir $config{"localdir"} . $config{"ospath"} . $dir;
-	vprint($config, "Creating directory $config{'server'} in $dir", "debug");
+	vprint( "Creating directory $config{'server'} in $dir", "debug");
 	unless ( -d $config{"server"}){
 		vprint($config, "Creating directory $config{'server'} in $dir", "debug");
 		mkdir $config{"server"} || print "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
@@ -208,7 +229,8 @@ sub getConfig(){#{{{
     # Default Options, these can be overruled
     # using commandline optins
 	my $user		 = "anonymous";
-	my $password	 = 'none@none.invalid';
+	#my $password	 = 'none@none.invalid';
+	my $password	 = '';
 	my $host		 = "localhost";
 	my $localdir	 = ".";
 	# FTP control port
@@ -290,18 +312,27 @@ sub getConfig(){#{{{
 	);
 	$config{"localdir"}=glob($config{"localdir"});
 
+	if (!defined($config{'password'}) or $config{'password'} eq "") {
+		ReadMode('noecho');
+		print "No Password has been given, \nplease type password for user $config{'user'}: ";
+		$config{'password'} = ReadLine(0);
+		print "\n";
+	}
+
 	return %config;
 }#}}}
 
 sub vprint {#{{{
-	my ($config, $msg, $facility) = @_;
-	if ($config->{"debug"}) {
+	my ($msg, $facility) = @_;
+	#my ($config, $msg, $facility) = @_;
+	if ($config{"debug"}) {
 		print "[$facility] $msg\n";
 	}
 }#}}}
 
 sub printStats {#{{{
-	my ($config) = @_;
+#	my ($config) = @_;
+	#my %stat= %{$config{'statistics'}};
 	my %stat= %{$config{'statistics'}};
 	$stat{'etime'} = time;
 	my $duration   = $stat{'etime'} - $stat{'stime'};
