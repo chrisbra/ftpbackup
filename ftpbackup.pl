@@ -229,8 +229,7 @@ sub getConfig(){#{{{
     # Default Options, these can be overruled
     # using commandline optins
 	my $user		 = "anonymous";
-	#my $password	 = 'none@none.invalid';
-	my $password	 = '';
+	my $password	 = 'none@none.invalid';
 	my $host		 = "localhost";
 	my $localdir	 = ".";
 	# FTP control port
@@ -312,11 +311,12 @@ sub getConfig(){#{{{
 	);
 	$config{"localdir"}=glob($config{"localdir"});
 
-	if (!defined($config{'password'}) or $config{'password'} eq "") {
+	if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {
 		ReadMode('noecho');
 		print "No Password has been given, \nplease type password for user $config{'user'}: ";
 		$config{'password'} = ReadLine(0);
 		print "\n";
+		ReadMode('restore');
 	}
 
 	return %config;
