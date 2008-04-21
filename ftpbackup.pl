@@ -42,7 +42,7 @@ $config{'debug'} = $DEBUG;
 vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
 my $ftp=FTPinit();
 
-my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
+my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'server'});
 FTPcheckOldVers(\@temp);
 
 my $backup_dir = FTPinitLocal();
@@ -221,9 +221,17 @@ sub FTPcheckOldVers{#{{{
          # sort reverse by mtime
          @temp = sort {(stat($a))[9] <=> (stat($b))[9]} @temp;
          while (@temp >= $config{'keep'}){
-             vprint(\%config, "Deleting file $temp[0]", "debug");
+             vprint("Deleting file $temp[0]", "debug");
              eval{
                  deltree $temp[0];
+                 # When we are here, the toplevel directory YYYYMMDD
+                 # might be empty, so just in case try to delete it.
+                 # This should generelly be safe, since rmdir won't delete
+                 # directories that are not empty.
+                 # 
+                 # $temp contains a string like that: ./20080420/server
+                 my @dir=split /$config{'ospath'}/,$temp[0],3;
+                 rmdir $dir[1];
                  shift(@temp);
              };
              if ($@){
@@ -232,7 +240,10 @@ sub FTPcheckOldVers{#{{{
          }
         
     }
-    return(0);
+    else {
+        return 0;
+    }
+    return 1;
 }#}}}
 
 sub getConfig(){#{{{
