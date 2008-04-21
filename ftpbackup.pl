@@ -263,6 +263,9 @@ sub getConfig(){#{{{
 
 	# Encrpytion: 0 disabled, 1 enabled
 	my $encrypt  = 0;
+	# holds the name of a file containing the password
+	# with which to encrypt using gpg
+	my $passfile;
 
 	GetOptions('user=s'    => \$user,#{{{
                'pass=s'    => \$password,
@@ -275,6 +278,7 @@ sub getConfig(){#{{{
 			   'statistics'=> \$stats,
 			   'binary'    => \$binary,
 			   'archivedir=s' => \$localdir,
+			   'passfile=s'  => \$passfile,
 			   'encrypt'   => \$encrypt,
 			   'exclude=s' => \@exclude);#}}}
 
@@ -315,30 +319,42 @@ sub getConfig(){#{{{
 	);
 	$config{"localdir"}=glob($config{"localdir"});
 
-	if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {
+	# Determine password for ftp-connection
+	if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {#{{{
 		ReadMode('noecho');
 		print "No Password has been given, \nplease type password for user $config{'user'}: ";
 		$config{'password'} = ReadLine(0);
 		print "\n";
 		ReadMode('restore');
-	}
-	if ($config{'enc'}){
+	}#}}}
+
+	# determine password fpr gpg encryption
+	if ($config{'enc'}){#{{{
 			my $try=0;
-			my $temp, my $temp1;
-			do {
-				print "\nPlease try again, both passphrase did NOT match!\n" if ($try > 0);
-				$try++;
-				ReadMode('noecho');
-				print "\nEnter Password for encryption:";
-				$temp = ReadLine(0);
-				print "\nRe-enter Password for encryption:";
-				$temp1 = ReadLine(0);
-				die "Could not reliably determine which password to use for encryption" if ($try >= 3);
+			my $passphrase, my $temp1;
+			if (defined($passfile)) {
+				open(PASS, "<$passfile") or die "[error]: Cannot open specified password file\n";
+				while (<PASS>) {
+					chomp;
+					$passphrase .= $_;
+				}
 			}
-		until ($temp eq $temp1);
-		print "\n";
-		chomp($config{'epasswd'} = $temp);
-	}
+			else {
+				do {
+					print "\nPlease try again, both passphrase did NOT match!\n" if ($try > 0);
+					$try++;
+					ReadMode('noecho');
+					print "\nEnter Password for encryption:";
+					$passphrase = ReadLine(0);
+					print "\nRe-enter Password for encryption:";
+					$temp1 = ReadLine(0);
+					die "Could not reliably determine which password to use for encryption" if ($try >= 3);
+				}
+			until ($passphrase eq $temp1);
+			print "\n";
+		}
+		chomp($config{'epasswd'} = $passphrase);
+	}#}}}
 
 		
 
