@@ -30,24 +30,22 @@ sub FTPcheckOldVers;
 sub FTPgetFiles;
 sub deltree;
 sub printStats;
+sub GPGencrypt;
 
 our %config = getConfig();
 
 vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
-#my $ftp=FTPinit(\%config);
 my $ftp=FTPinit();
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
 FTPcheckOldVers(\@temp, \%config);
 FTPcheckOldVers(\@temp);
 
-#my $backup_dir = FTPinitLocal(\%config);
 my $backup_dir = FTPinitLocal();
 vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
-#unless (FTPgetFiles($ftp, \@temp, $config{'dir'}, \%config)){
 unless (FTPgetFiles($ftp, \@temp, $config{'dir'} )){
 	vprint( "Error occured, aborting.", "debug");
 	$ftp->quit;
@@ -55,11 +53,9 @@ unless (FTPgetFiles($ftp, \@temp, $config{'dir'} )){
 }
 $ftp->quit;
 printStats if $config{'stats'};
-#printf("%s stats: %i\n", $config{'stats'}? "enabled" : "disabled", $config{'stats'});
 
 
 sub FTPgetFiles {#{{{
-	#(my $ftp, my $list, my $ldir, my $config) = @_;
 	(my $ftp, my $list, my $ldir) = @_;
 	mkdir $ldir unless -d $ldir;
 	chdir $ldir;
@@ -89,21 +85,23 @@ sub FTPgetFiles {#{{{
 				next LIST;
 			}
 			vprint( "Downloading directory $files[8]", "debug");
-#			print "dir: %{$config->{'statistics'}}->{'dirs'}\n";
-			#$config->{'statistics'}->{'dirs'}+=1;
 			$config{'statistics'}->{'dirs'}+=1;
 			my @temp = $ftp->dir($files[8]);
-			#$status = FTPgetFiles($ftp, \@temp, $files[8], $config);
 			$status = FTPgetFiles($ftp, \@temp, $files[8]);
 		}
 		# download files
 		else {
 			vprint( "Downloading file $files[8] $!", "debug");
-			#$config->{'statistics'}->{'files'}+=1;
-			#$config->{'statistics'}->{'size'}+=$files[4];
 			$config{'statistics'}->{'files'}+=1;
 			$config{'statistics'}->{'size'}+=$files[4];
 			$status = $ftp->get($files[8]); 
+			if ($config{'enc'}){
+				use GnuPG;
+				vprint("encrypting $files[8] using provided password\n", "debug");
+				chomp(my $dir=`pwd`);
+				GPGencrypt($dir.$config{'ospath'}.$files[8]);
+
+			}
 			vprint("Could not download $files[8] $!", "error") unless (defined($status));
 		}
 	}
@@ -112,12 +110,9 @@ sub FTPgetFiles {#{{{
 }#}}}
 
 sub FTPinit {#{{{
-#	my $config = shift;
 	# This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
-	#my $ftp = Net::FTP->new($config->{"server"}, Passive => $config->{"active"}) or die "[error] Cannot connect to $config->{'server'}";
 	my $ftp = Net::FTP->new($config{"server"}, Passive => $config{"active"}) or die "[error] Cannot connect to $config{'server'}";
 	vprint( "successfull logged into Server $config{'server'}", "debug");
-	#$ftp->login($config->{"user"}, $config->{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
 	$ftp->login($config{"user"}, $config{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
 	 # enable binary mode, if configured
 	if($config{"binary"}){
@@ -126,13 +121,10 @@ sub FTPinit {#{{{
 	}
 	# Check local Backup Directory
 	eval { 
-		#mkdir $config->{"localdir"} unless (-d $config->{"localdir"}); 
 		mkdir $config{"localdir"} unless (-d $config{"localdir"}); 
-		#chmod 0700, $config->{"localdir"} unless (-w $config->{"localdir"});
 		chmod 0700, $config{"localdir"} unless (-w $config{"localdir"});
 	};
 	if ($@) {
-		#	die "[error] Setting up Backup Directory $config->{'localdir'}, exiting..."
 		die "[error] Setting up Backup Directory $config{'localdir'}, exiting..."
 	}
 	else { 
@@ -158,11 +150,14 @@ If no username is given, $name tries to use anonymous login.
 Option:
 -h --help			   This screen
 -u --user=<username>   FTP Server User
--p --pass=<password>   FTP Server Password
+-p --pass=<password>   FTP Server Password (in general:
+					   DO NOT USE THIS OPTION)
 --port                 FTP Server Port
 -d --debug             for debugging $name
 --[no]recursive        (do not) download recursively
 --active               use active mode (passive=default)
+--encrypt			   enable encryption using symmetric gpg encryption.
+					   (when used, you will be asked for a password).
 --statistics           Print download statistics when finished.
 --archivedir=dir       Save downloaded files in dir (default: current 
 					   directory)
@@ -265,6 +260,9 @@ sub getConfig(){#{{{
 		size     => 0
 	);
 
+	# Encrpytion: 0 disabled, 1 enabled
+	my $encrypt  = 0;
+
 	GetOptions('user=s'    => \$user,#{{{
                'pass=s'    => \$password,
                'help'      => sub {usage},
@@ -276,6 +274,7 @@ sub getConfig(){#{{{
 			   'statistics'=> \$stats,
 			   'binary'    => \$binary,
 			   'archivedir=s' => \$localdir,
+			   'encrypt'   => \$encrypt,
 			   'exclude=s' => \@exclude);#}}}
 
 	if (defined(@ARGV)){#{{{
@@ -307,7 +306,8 @@ sub getConfig(){#{{{
 		ospath   =>  $ospath,
 		exclude  =>  \@exclude,
 		statistics => \%statistics,
-		dir		 =>  $dir
+		dir		 =>  $dir,
+		enc		 =>  $encrypt
 	);
 	$config{"localdir"}=glob($config{"localdir"});
 
@@ -318,21 +318,38 @@ sub getConfig(){#{{{
 		print "\n";
 		ReadMode('restore');
 	}
+	if ($config{'enc'}){
+			my $try=0;
+			my $temp, my $temp1;
+			do {
+				print "\nPlease try again, both passphrase did NOT match!\n" if ($try > 0);
+				$try++;
+				ReadMode('noecho');
+				print "\nEnter Password for encryption:";
+				$temp = ReadLine(0);
+				print "\nRe-enter Password for encryption:";
+				$temp1 = ReadLine(0);
+				die "Could not reliably determine which password to use for encryption" if ($try >= 3);
+			}
+		until ($temp eq $temp1);
+		print "\n";
+		chomp($config{'epasswd'} = $temp);
+	}
+
+		
+
 
 	return %config;
 }#}}}
 
 sub vprint {#{{{
 	my ($msg, $facility) = @_;
-	#my ($config, $msg, $facility) = @_;
 	if ($config{"debug"}) {
 		print "[$facility] $msg\n";
 	}
 }#}}}
 
 sub printStats {#{{{
-#	my ($config) = @_;
-	#my %stat= %{$config{'statistics'}};
 	my %stat= %{$config{'statistics'}};
 	$stat{'etime'} = time;
 	my $duration   = $stat{'etime'} - $stat{'stime'};
@@ -393,6 +410,17 @@ sub deltree {#{{{
 	closedir DIR;
 	rmdir $dir;
 	return(0);
+}#}}}
+
+sub GPGencrypt {#{{{
+#	no strict "subs";
+	my $file = shift;
+	my $gpg = new GnuPG();
+	my $password = $config{'epasswd'};
+	$gpg->encrypt(plaintext => $file, output => $file.".gpg", 
+		passphrase => $password, symmetric => 1);
+	vprint("encrypting $file using $config{'epasswd'},debug)";
+	unlink $file;
 }#}}}
 
 # vim: set fdm=marker fdl=0:
