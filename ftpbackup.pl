@@ -522,7 +522,7 @@ sub RsyncBackupDirs{#{{{
     # --sparse           # handle sparse files efficiently
     # --link-dest        # hardlink files with $dir
     no strict "subs";
-    my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src."/", "dest" => $dest, "link-dest" => $lsrc."/"});
+    my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src."/", "dest" => $dest."/", "link-dest" => $lsrc});
     #my $cmd = $rsync->getcmd();
     #foreach (@$cmd) {
     #    print "$_\n";
