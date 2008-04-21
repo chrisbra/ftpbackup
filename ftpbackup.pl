@@ -32,7 +32,10 @@ sub printStats;
 sub GPGencrypt;
 sub GPGdetPassphrase;
 
-our %config = getConfig();
+my $DEBUG  = 1;
+our %config;
+$config{'debug'} = $DEBUG;
+%config = getConfig();
 
 vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
 my $ftp=FTPinit();
@@ -329,6 +332,11 @@ sub getConfig(){#{{{
 		ReadMode('restore');
 	}#}}}
 
+	print "passfile: $passfile, Enc: ".not($config{'enc'})."\n";
+	if (defined($passfile) and (not $config{'enc'} )){
+		vprint("You specified a passwordfile, but did not enable encryption.
+Ignoring --passfile. You probably want the --encrypt switch.", "warn");
+	}
 	# determine password fpr gpg encryption
 	if ($config{'enc'}){
 		$config{'epasswd'} = GPGdetPassphrase($passfile);
