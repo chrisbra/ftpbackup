@@ -30,6 +30,7 @@ sub FTPgetFiles;
 sub deltree;
 sub printStats;
 sub GPGencrypt;
+sub GPGdetPassphrase;
 
 our %config = getConfig();
 
@@ -192,7 +193,7 @@ sub FTPinitLocal{#{{{
 	chdir $config{"localdir"} . $config{"ospath"} . $dir;
 	vprint( "Creating directory $config{'server'} in $dir", "debug");
 	unless ( -d $config{"server"}){
-		vprint($config, "Creating directory $config{'server'} in $dir", "debug");
+		vprint("Creating directory $config{'server'} in $dir", "debug");
 		mkdir $config{"server"} || print "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
 	 }
 	return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
@@ -329,36 +330,9 @@ sub getConfig(){#{{{
 	}#}}}
 
 	# determine password fpr gpg encryption
-	if ($config{'enc'}){#{{{
-			my $try=0;
-			my $passphrase, my $temp1;
-			if (defined($passfile)) {
-				open(PASS, "<$passfile") or die "[error]: Cannot open specified password file\n";
-				while (<PASS>) {
-					chomp;
-					$passphrase .= $_;
-				}
-			}
-			else {
-				do {
-					print "\nPlease try again, both passphrase did NOT match!\n" if ($try > 0);
-					$try++;
-					ReadMode('noecho');
-					print "\nEnter Password for encryption:";
-					$passphrase = ReadLine(0);
-					print "\nRe-enter Password for encryption:";
-					$temp1 = ReadLine(0);
-					die "Could not reliably determine which password to use for encryption" if ($try >= 3);
-				}
-			until ($passphrase eq $temp1);
-			print "\n";
-		}
-		chomp($config{'epasswd'} = $passphrase);
-	}#}}}
-
-		
-
-
+	if ($config{'enc'}){
+		$config{'epasswd'} = GPGdetPassphrase($passfile);
+	}
 	return %config;
 }#}}}
 
@@ -442,5 +416,34 @@ sub GPGencrypt {#{{{
 	vprint("encrypting $file using $config{'epasswd'}","debug");
 	unlink $file;
 }#}}}
+
+sub GPGdetPassphrase{#{{{
+		my $passfile = shift;
+		my $try=0;
+		my $passphrase, my $temp1;
+		if (defined($passfile)) {
+			open(PASS, "<$passfile") or die "[error]: Cannot open specified password file\n";
+			while (<PASS>) {
+				chomp;
+				$passphrase .= $_;
+			}
+		}
+		else {
+			do {
+				print "\nPlease try again, both passphrase did NOT match!\n" if ($try > 0);
+				$try++;
+				ReadMode('noecho');
+				print "\nEnter Password for encryption:";
+				$passphrase = ReadLine(0);
+				print "\nRe-enter Password for encryption:";
+				$temp1 = ReadLine(0);
+				die "Could not reliably determine which password to use for encryption" if ($try >= 3);
+			}
+		until ($passphrase eq $temp1);
+		print "\n";
+	}
+return $passphrase;
+}#}}}
+
 
 # vim: set fdm=marker fdl=0:
