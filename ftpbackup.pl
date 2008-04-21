@@ -15,7 +15,6 @@ use Config;
 use Term::ReadKey;
 # not yet needed
 #
-#use GnuPG;
 # create temporary files
 #use File::Temp;
 
@@ -159,6 +158,8 @@ Option:
 --encrypt			   enable encryption using symmetric gpg encryption.
 					   (when used, you will be asked for a password).
 --statistics           Print download statistics when finished.
+--encrypt			   encrypt each file using gpg. By default $name
+					   will ask for a passphrase.
 --archivedir=dir       Save downloaded files in dir (default: current 
 					   directory)
 --exclude='pattern'    Use an exclude pattern. Pattern  is matched
