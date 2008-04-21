@@ -13,10 +13,11 @@ use Getopt::Long;
 use Config;
 # read from terminal (e.g. password)
 use Term::ReadKey;
-# not yet needed
-#
 # create temporary files
-#use File::Temp;
+use File::Temp qw /tempdir/ ;
+#use File::Spec::Functions;
+#use Cwd ;
+use Cwd  qw / abs_path getcwd / ;
 
 # Function prototypes
 sub usage;
@@ -31,6 +32,7 @@ sub deltree;
 sub printStats;
 sub GPGencrypt;
 sub GPGdetPassphrase;
+sub RsyncBackupDirs;
 
 # This is main:
 
@@ -43,10 +45,19 @@ vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
 my $ftp=FTPinit();
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'server'});
-FTPcheckOldVers(\@temp);
+my $lsrc = FTPcheckOldVers(\@temp);
+$lsrc=abs_path($$lsrc[0]);
 
 my $backup_dir = FTPinitLocal();
 vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
+# change relative path of $backup_dir to absolute path
+$backup_dir = getcwd();
+
+my $tdir;
+if ($config{'hardlink'}){
+    $tdir  = tempdir();
+    chdir $tdir;
+}
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
@@ -60,6 +71,14 @@ if ($config{'delftp'}) {
      die "[error] Could not delete $config{'dir'}\n", $ftp->message;
  }
 $ftp->quit;
+
+if ($config{'hardlink'}){
+    print "link_src: $lsrc\n";
+#    my $temp = abs_path($$lsrc[0]);
+    RsyncBackupDirs($tdir, $lsrc, $backup_dir);
+    deltree($tdir);
+}
+
 printStats if $config{'stats'};
 
 # Finished
@@ -135,9 +154,6 @@ sub FTPinit {#{{{
     if ($@) {
         die "[error] Setting up Backup Directory $config{'localdir'}, exiting..."
     }
-    else { 
-        vprint( "$config{'localdir'} looks alright", "debug"); 
-    }
     return $ftp;
 }#}}}
 
@@ -179,6 +195,7 @@ Option:
 --exclude='pattern'    Use an exclude pattern. Pattern  is matched
                        as regular expression. You may use this option 
                        several times.
+--hardlink             hardlink backups using rsync
 
 For example:
 $name --statistics  ftp://ftp.eu.kernel.org/pub/ 
@@ -204,10 +221,9 @@ sub FTPinitLocal{#{{{
         vprint("Cannot create Directory $dir in $config{'localdir'}.", "error");
     }
     chdir $config{"localdir"} . $config{"ospath"} . $dir;
-    vprint( "Creating directory $config{'server'} in $dir", "debug");
     unless ( -d $config{"server"}){
         vprint("Creating directory $config{'server'} in $dir", "debug");
-        mkdir $config{"server"} || print "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
+        mkdir $config{"server"} || die "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
      }
     chdir $config{"server"};
     return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
@@ -240,10 +256,10 @@ sub FTPcheckOldVers{#{{{
          }
         
     }
-    else {
-        return 0;
-    }
-    return 1;
+    # do not return a reference to array @temp, as 
+    # this might change later
+    my @array = @temp;
+    return \@array;
 }#}}}
 
 sub getConfig(){#{{{
@@ -294,6 +310,8 @@ sub getConfig(){#{{{
     my $passfile;
     # Delete original data ?
     my $delete_source = 0;
+    # hardlink files
+    my $hardlink = 0;
 
     GetOptions('user=s'    => \$user,#{{{
                'pass=s'    => \$password,
@@ -309,6 +327,7 @@ sub getConfig(){#{{{
                'passfile=s'  => \$passfile,
                'removeftp' => \$delete_source,
                'encrypt'   => \$encrypt,
+               'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
     if (defined(@ARGV)){#{{{
@@ -345,6 +364,7 @@ sub getConfig(){#{{{
         statistics => \%statistics,
         delftp   =>  $delete_source,
         dir      =>  $dir,
+        hardlink =>  $hardlink,
         enc      =>  $encrypt
     );
     $config{"localdir"}=glob($config{"localdir"});
@@ -366,6 +386,9 @@ Ignoring --passfile. You probably want the --encrypt switch.", "warn");
     if ($config{'enc'}){
         use GnuPG;
         $config{'epasswd'} = GPGdetPassphrase($passfile);
+    }
+    if ($config{'hardlink'}){
+        use File::Rsync;
     }
     return %config;
 }#}}}
@@ -477,6 +500,37 @@ sub GPGdetPassphrase{#{{{
     }
     chomp $passphrase;
 return $passphrase;
+}#}}}
+
+sub RsyncBackupDirs{#{{{
+    # src, hardlink_src, destination
+    (my $src, my $lsrc, my $dest) = @_;
+    # archive sets some defaults, but for reference we include all options.
+    # see rsync(1)
+    # --archive sets:
+    #   --recursive (-r) # recursive call
+    #   --links (-l)     # copy symlinks
+    #   --perms (-p)     # preserve permissions
+    #   --times (-t)     # preserve modification time
+    #   --group (-g)     # preserve group
+    #   --owner (-o)     # preserve owner
+    #   --devices        # copy devices
+    #   --specials       # copy special files
+    # --hard-links       # preserve hard-links
+    # --acls             # preserve ACLs        (probably not needed for ftp)
+    # --xattrs           # prexerve extended attributes (probably not needed for ftp)
+    # --sparse           # handle sparse files efficiently
+    # --link-dest        # hardlink files with $dir
+    no strict "subs";
+    my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src."/", "dest" => $dest, "link-dest" => $lsrc."/"});
+    #my $cmd = $rsync->getcmd();
+    #foreach (@$cmd) {
+    #    print "$_\n";
+    #}
+    #$rsync->exec({ src => $src, dest => $dest}) or print "[error] Rsync call failed, aborting ...\n";
+    $rsync->exec or print "[error] Rsync call failed, aborting ...\n";
+    my $status = $rsync->status;
+    return 1;
 }#}}}
 
 
