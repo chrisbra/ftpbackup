@@ -32,6 +32,8 @@ sub printStats;
 sub GPGencrypt;
 sub GPGdetPassphrase;
 
+# This is main:
+
 my $DEBUG  = 1;
 our %config;
 $config{'debug'} = $DEBUG;
@@ -41,7 +43,6 @@ vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
 my $ftp=FTPinit();
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*");
-FTPcheckOldVers(\@temp, \%config);
 FTPcheckOldVers(\@temp);
 
 my $backup_dir = FTPinitLocal();
@@ -56,6 +57,8 @@ unless (FTPgetFiles($ftp, \@temp, $config{'dir'} )){
 }
 $ftp->quit;
 printStats if $config{'stats'};
+
+# Finished
 
 
 sub FTPgetFiles {#{{{
@@ -94,16 +97,12 @@ sub FTPgetFiles {#{{{
 		}
 		# download files
 		else {
-			vprint( "Downloading file $files[8] $!", "debug");
+			vprint( "Downloading file $files[8]", "debug");
 			$config{'statistics'}->{'files'}+=1;
 			$config{'statistics'}->{'size'}+=$files[4];
 			$status = $ftp->get($files[8]); 
 			if ($config{'enc'}){
-				use GnuPG;
-				vprint("encrypting $files[8] using provided password\n", "debug");
-				chomp(my $dir=`pwd`);
-				GPGencrypt($dir.$config{'ospath'}.$files[8]);
-
+				GPGencrypt($files[8]);
 			}
 			vprint("Could not download $files[8] $!", "error") unless (defined($status));
 		}
@@ -180,7 +179,7 @@ EOF
 }#}}}
 
 sub FTPinitLocal{#{{{
-	my $config	 = shift;
+#	my $config	 = shift;
 
 	# Datum im Format YYYYMMDD
 	(my $mday, my $mon, my $year) = (localtime(time))[3,4,5];
@@ -199,12 +198,13 @@ sub FTPinitLocal{#{{{
 		vprint("Creating directory $config{'server'} in $dir", "debug");
 		mkdir $config{"server"} || print "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
 	 }
+	chdir $config{"server"};
 	return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
 }#}}}
 
 sub FTPcheckOldVers{#{{{
 	my $temp   = shift;
-	my $config = shift;
+	#my $config = shift;
 	if (@temp >= $config{'keep'}){
 		 # Determine the oldest entries to delete
 		 # sort reverse by mtime
@@ -270,6 +270,8 @@ sub getConfig(){#{{{
 	# holds the name of a file containing the password
 	# with which to encrypt using gpg
 	my $passfile;
+	# Delete original data ?
+	my $delete_source = 0;
 
 	GetOptions('user=s'    => \$user,#{{{
                'pass=s'    => \$password,
@@ -283,6 +285,7 @@ sub getConfig(){#{{{
 			   'binary'    => \$binary,
 			   'archivedir=s' => \$localdir,
 			   'passfile=s'  => \$passfile,
+			   'removeftp' => \$delete_source,
 			   'encrypt'   => \$encrypt,
 			   'exclude=s' => \@exclude);#}}}
 
@@ -318,6 +321,7 @@ sub getConfig(){#{{{
 		ospath   =>  $ospath,
 		exclude  =>  \@exclude,
 		statistics => \%statistics,
+		delftp   =>  $delete_source,
 		dir		 =>  $dir,
 		enc		 =>  $encrypt
 	);
@@ -332,13 +336,13 @@ sub getConfig(){#{{{
 		ReadMode('restore');
 	}#}}}
 
-	print "passfile: $passfile, Enc: ".not($config{'enc'})."\n";
 	if (defined($passfile) and (not $config{'enc'} )){
 		vprint("You specified a passwordfile, but did not enable encryption.
 Ignoring --passfile. You probably want the --encrypt switch.", "warn");
 	}
 	# determine password fpr gpg encryption
 	if ($config{'enc'}){
+		use GnuPG;
 		$config{'epasswd'} = GPGdetPassphrase($passfile);
 	}
 	return %config;
@@ -421,7 +425,7 @@ sub GPGencrypt {#{{{
 	my $password = $config{'epasswd'};
 	$gpg->encrypt(plaintext => $file, output => $file.".gpg", 
 		passphrase => $password, symmetric => 1);
-	vprint("encrypting $file using $config{'epasswd'}","debug");
+	vprint("encrypting $file using provided password","debug");
 	unlink $file;
 }#}}}
 
@@ -432,7 +436,6 @@ sub GPGdetPassphrase{#{{{
 		if (defined($passfile)) {
 			open(PASS, "<$passfile") or die "[error]: Cannot open specified password file\n";
 			while (<PASS>) {
-				chomp;
 				$passphrase .= $_;
 			}
 		}
@@ -450,6 +453,7 @@ sub GPGdetPassphrase{#{{{
 		until ($passphrase eq $temp1);
 		print "\n";
 	}
+	chomp $passphrase;
 return $passphrase;
 }#}}}
 
