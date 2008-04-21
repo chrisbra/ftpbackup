@@ -280,6 +280,9 @@ sub getConfig(){#{{{
 
 	if (defined(@ARGV)){#{{{
 		my $uri		 = shift(@ARGV);
+		if (!defined($uri) or $uri eq "" ) {
+			die "[error] No Server specified, nothing to do, exiting...\n";
+		}
 		# now we have 4 fields: 1: ftp:/
 		#                       2: <null>
 		#                       3: server
@@ -420,7 +423,7 @@ sub GPGencrypt {#{{{
 	my $password = $config{'epasswd'};
 	$gpg->encrypt(plaintext => $file, output => $file.".gpg", 
 		passphrase => $password, symmetric => 1);
-	vprint("encrypting $file using $config{'epasswd'},debug)";
+	vprint("encrypting $file using $config{'epasswd'}","debug");
 	unlink $file;
 }#}}}
 
