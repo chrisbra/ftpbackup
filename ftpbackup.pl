@@ -1,5 +1,181 @@
 #!/usr/bin/perl
 
+=head1 NAME
+
+ftpbackup - backup from an ftp server
+
+=head1 SYNOPSIS
+
+B<ftpbackup> [B<Options>] I<URL>
+
+=head1 DESCRIPTION
+
+B<ftpbackup> allows to backup all files from an FTP server locally. If no
+local directory is specified, B<ftpbackup> tries to save in the current
+directory. 
+
+When storing, B<ftpbackup> stores all downloaded files below
+YYYYMMDD/servername, so you can create a nice little hierachical
+storage. For each servername, B<ftpbackup> keeps track of a default of 3
+backups, removing old backups if necessary. If you want to keep more
+than 3 backup-version, look at the B<--keep> option. 
+
+Additionally B<ftpbackup> can try to hardlink each backup with the previous
+version similar to how rsync does it (in fact, it uses rsync for
+hardlinking the data). B<ftpbackup> can also encrypt each downloaded file
+using C<gpg --encrypt --symmetric>. 
+
+If no username/password is specified, B<ftpbackup> will try to
+authenticat using anonymous logins (this means username=anonymous,
+password=none@none.invalid).
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<--active>
+
+Use active connection mode. (Default is passive).
+
+=item B<--archivedir>=I<dir>       
+
+Store the backups below I<dir>. Foreach run B<ftpbackup> will create
+a directory in the date format 'YYYYMMDD' (as B<date +'%Y%m%d>' would
+create it) and below that directory a directory of the I<server>. 
+(e.g. when running on Apr. 4th, 2008 and backing up kernel.org,
+B<ftpbackup> would create a directory structure I<20080404/kernel.org/>)
+
+=item B<-d>, B<--debug>
+
+Turn on Debugging Infos.
+
+=item B<--encrypt> 
+
+This switch enables symmetric encryption using B<gpg>(1). In order for
+this to work, B<gpg>(1) needs to be installed and available in your
+path and the perl module B<GnuPG> needs to be installed. If the option
+B<--passfile> is not specified, B<ftpbackup> will interactively ask for
+an encryption password.
+
+=item B<--exclude=>I<'pattern'>    
+
+Specify an exclude pattern. You can use perl regular expressions (see
+B<perlre>(1) for details). It is possible to specify this option several
+times and each pattern will be applied to all files and directories on
+the server, skipping each match.
+
+=item B<--hardlink>
+
+When storing the data locally, use B<rsync>(1) to store the data.
+Basically this will call B<rsync>(1) I<--archive> I<--hard-links>
+I<--sparse> I<--link-dest=oldbackup> I<src/> I<dest/>
+This is handy, when automatically downloading regularly, since that will
+store each version of a file only once.
+
+=item B<-h>, B<--help>
+
+Displays the help screen.
+
+=item B<--keep>=number
+
+Only keep I<number> version locally, deleting the oldest version. If not
+specified, ftpbackup will keep 3 versions.
+
+=item B<--passfile=>I<file>      
+
+When encryption has been specified using B<--encrypt>, you can instruct
+B<ftpbackup> to read I<file> for a password. This file needs only to
+contain the password. B<ftpbackup> will use the B<whole input> as
+passphrase.
+
+=item B<--port>
+
+Specify the FTP Server Port
+
+=item B<--[no]recursion>        
+
+By default, B<ftpbackup> will recursively download all files below the
+given directory. You can turn off recursive downloading using
+B<--norecursion>
+
+=item B<--removesrc>            
+
+Try to remove the directory on the FTP server when finished.
+
+=item B<--statistics>           
+
+Print a little statistic when finished. 
+
+
+=head1 NOTES
+
+B<ftpbackup> requires B<perl>(1) of version 5.8 or higher. If you want
+to make use of hardlinking your downloaded backups, B<ftpbackup> needs
+B<rsync>(1) available in your path and the perl module B<File::Rsync>. For
+encrypting the downloaded files you'll need the perl module B<GnuPG> and
+B<gpg>(1) available in your path.
+
+=head2 FTP URLs
+
+B<ftpbackup> expects B<FTP> URLs using the following syntax:
+I<ftp://username:password@server/directory>. If no password is
+specified, B<ftpbackup> will ask interactively for the password. If both
+username and password are not specified, B<ftpbackup> will use anonymous
+authentication. You can leave out the directory, in which case
+B<ftpbackup> will simply try to download from the server's root level.
+
+=back
+
+=head1 EXAMPLES
+
+=over 4
+
+=item B<ftpbackup> I<--statistics> ftp://ftp.eu.kernel.org/pub/
+
+Download all data from ftp.eu.kernel.org/pub using anonymous access.
+When finished print a litte statistic summary.
+
+=item B<ftpbackup> I<--statistics> I<--exclude='\.iso$'>
+ftp://ftp.eu.kernel.org/pub/
+
+Download all files, except iso images, when finished print a little
+summary.
+
+=item B<ftpbackup> I<--statistics> I<--exclude='\.iso$'> I<--encrypt>
+I<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
+
+Download only files in directory knoppix on the kernel server, excluding iso
+images and locally encrypting the files. You will be asked for a password when
+run.
+
+=item B<ftpbackup> I<--hardlink> I<--encrypt> I<--keep=5>
+I<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
+
+Download all files in directory knoppix on the kernel server and locally
+encrypting the files. When storing the files locally try to hardlink the files
+with an older backup if one exists. But keep only 5 versions locally. (The
+oldest one will be deleted.) Hardlinking obviously only works, when you
+encrypt with the same passphrase every time.
+
+=back
+
+=head1 BUGS
+
+When run several times a day for the same ftp server, B<ftpbackup> will
+happily overwrite already existing files.
+B<ftpbackup> does not yet take care of the permissions on the server. So it
+will create all files as the current user with the default umask.
+When interrupted and the option I<--hardlink> is used, it will not clean up
+already downloaded files.
+
+=head1 AUTHOR
+
+Copyright 2008 by Christian Brabandt <cb@256bit.org>
+
+Licensed under the GNU GPL.
+
+=cut
+
 # Subversion Properties:
 # $Id$
 
@@ -108,7 +284,7 @@ sub FTPgetFiles {#{{{
         foreach $xpattern (@{$config{'exclude'}}){
              if ($files[8] =~ /$xpattern/) {
                  vprint( "Skipping File $files[8] because it matches exclude pattern", "debug"); 
-                 last LIST;
+                 next LIST;
              }
          }
         # Recursive download for directories, if configured
@@ -171,7 +347,7 @@ sub FTPlist{#{{{
 sub usage{#{{{
     chomp(my $name=`basename $0`);
     print <<EOF;
-Usage: $name [OPTION] ftp://server/directory
+Usage: $name [OPTION] URL
 $name takes an FTP account and recursively downloads all files. This can
 be helpful for automatic backups. By default, it will save all files in
 the current directory below a directory YYYYMMDD/hostname.
@@ -179,11 +355,9 @@ If no username is given, $name tries to use anonymous login.
 
 Option:
 -h --help              This screen
--u --user=<username>   FTP Server User
--p --pass=<password>   FTP Server Password 
 --port                 FTP Server Port
 -d|--debug             for debugging $name
---[no]recursive        (do not) download recursively
+--[no]recursion        (do not) download recursively
 --active               use active mode (passive=default)
 --encrypt              enable encryption using symmetric gpg encryption.
                        (when used, you $name will asked for a password).
@@ -193,12 +367,15 @@ Option:
                        passphrase.
 --archivedir=dir       Save downloaded files in dir (default: current 
                        directory)
---removeftp            Try to remove the directory on the FTP server
+--removesrc            Try to remove the directory on the FTP server
                        when finished.
 --exclude='pattern'    Use an exclude pattern. Pattern  is matched
                        as regular expression. You may use this option 
                        several times.
 --hardlink             hardlink backups using rsync
+
+URL should generally be of the form: ftp://[user:password]\@host[/directory],
+where user and password are optionally 
 
 For example:
 $name --statistics  ftp://ftp.eu.kernel.org/pub/ 
@@ -316,9 +493,7 @@ sub getConfig(){#{{{
     # hardlink files
     my $hardlink = 0;
 
-    GetOptions('user=s'    => \$user,#{{{
-               'pass=s'    => \$password,
-               'help'      => sub {usage},
+    GetOptions('help'      => sub {usage}, #{{{
                'server=s'  => \$host,
                'recursion!'=> \$recursive,
                'port=i'    => \$port,
@@ -328,33 +503,20 @@ sub getConfig(){#{{{
                'binary'    => \$binary,
                'archivedir=s' => \$localdir,
                'passfile=s'  => \$passfile,
-               'removeftp' => \$delete_source,
+			   'keep=i'	   => \$keep,
+               'removesrc' => \$delete_source,
                'encrypt'   => \$encrypt,
                'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
-#    if (defined(@ARGV)){#{{{
-#        my $uri      = shift(@ARGV);
-#        if (!defined($uri) or $uri eq "" ) {
-#            die "[error] No Server specified, nothing to do, exiting...\n";
-#        }
-#        # now we have 4 fields: 1: ftp://
-#        #                       2: <null>
-#        #                       3: server
-#        #                       4: directory
-#        my @a_uri    = split /\//,$uri, 4;
-#        $host        = $a_uri[2];
-#        if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
-#            $dir         = $a_uri[3];
-#        }
-#    }#}}}
 ( $user, $password, $host, $dir ) = parseCmdline(@ARGV);
 
-print "user: $user\n";
-print "password: $password\n";
-print "host: $host\n";
-print "dir: $dir\n";
-die "exit";
+# Only for testing purposes
+#print "user: $user\n";
+#print "password: $password\n";
+#print "host: $host\n";
+#print "dir: $dir\n";
+#die "exit";
 
 
     my %config = (#{{{
@@ -380,11 +542,10 @@ die "exit";
     $config{"localdir"}=glob($config{"localdir"});
 
     # Determine password for ftp-connection
-	#if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {#{{{
     if ((!defined($config{'pass'})) or ($config{'pass'} eq "")) {#{{{
         ReadMode('noecho');
         print "No Password has been given, \nplease type password for user $config{'user'}: ";
-        $config{'password'} = ReadLine(0);
+        chomp($config{'password'} = ReadLine(0));
         print "\n";
         ReadMode('restore');
     }#}}}
