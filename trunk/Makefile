@@ -1,4 +1,4 @@
-PERLSCRIPT=ftpbackup.pl
+PERLSCRIPT=ftpbackup
 MAN=ftpbackup.1
 INSTALL_BIN=install -s
 
