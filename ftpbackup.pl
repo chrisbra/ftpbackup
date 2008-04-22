@@ -180,17 +180,14 @@ If no username is given, $name tries to use anonymous login.
 Option:
 -h --help              This screen
 -u --user=<username>   FTP Server User
--p --pass=<password>   FTP Server Password (in general:
-                       DO NOT USE THIS OPTION)
+-p --pass=<password>   FTP Server Password 
 --port                 FTP Server Port
--d --debug             for debugging $name
+-d|--debug             for debugging $name
 --[no]recursive        (do not) download recursively
 --active               use active mode (passive=default)
 --encrypt              enable encryption using symmetric gpg encryption.
-                       (when used, you will be asked for a password).
+                       (when used, you $name will asked for a password).
 --statistics           Print download statistics when finished.
---encrypt              encrypt each file using gpg. By default $name
-                       will ask for a passphrase.
 --passfile='file'      When encrypting the files locally using gnupg, 
                        use the password found in file as symmetric
                        passphrase.
@@ -209,7 +206,7 @@ would download all files below pub from the kernel mirror and save them in
 the current directory below YYYYYMMDD/ftp.eu.kernel.org/. When finished it
 will print a nice little statistic.
 EOF
-     exit(1);
+     exit(0);
 }#}}}
 
 sub FTPinitLocal{#{{{
@@ -272,9 +269,11 @@ sub getConfig(){#{{{
     
     # Default Options, these can be overruled
     # using commandline optins
-    my $user         = "anonymous";
-    my $password     = 'none@none.invalid';
-    my $host         = "localhost";
+	my $user;
+	my $password;
+	my $host;
+	# Welches Directory downloaden
+	my $dir;
     my $localdir     = ".";
     # FTP control port
     my $port         = 21;
@@ -292,8 +291,6 @@ sub getConfig(){#{{{
     # Wieviele Versionen behalten:
     my $keep         = 3;
 
-    # Welches Directory downloaden
-    my $dir          = ".";
 
     # exclude patterns
     my @exclude      = ();
@@ -336,24 +333,31 @@ sub getConfig(){#{{{
                'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
-    if (defined(@ARGV)){#{{{
-        my $uri      = shift(@ARGV);
-        if (!defined($uri) or $uri eq "" ) {
-            die "[error] No Server specified, nothing to do, exiting...\n";
-        }
-        # now we have 4 fields: 1: ftp:/
-        #                       2: <null>
-        #                       3: server
-        #                       4: directory
-        my @a_uri    = split /\//,$uri, 4;
-        $host        = $a_uri[2];
-        if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
-            $dir         = $a_uri[3];
-        }
-    }#}}}
+#    if (defined(@ARGV)){#{{{
+#        my $uri      = shift(@ARGV);
+#        if (!defined($uri) or $uri eq "" ) {
+#            die "[error] No Server specified, nothing to do, exiting...\n";
+#        }
+#        # now we have 4 fields: 1: ftp://
+#        #                       2: <null>
+#        #                       3: server
+#        #                       4: directory
+#        my @a_uri    = split /\//,$uri, 4;
+#        $host        = $a_uri[2];
+#        if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
+#            $dir         = $a_uri[3];
+#        }
+#    }#}}}
+( $user, $password, $host, $dir ) = parseCmdline(@ARGV);
+
+print "user: $user\n";
+print "password: $password\n";
+print "host: $host\n";
+print "dir: $dir\n";
+die "exit";
 
 
-    my %config = (
+    my %config = (#{{{
         user     =>  $user,
         pass     =>  $password,
         server   =>  $host,
@@ -372,11 +376,12 @@ sub getConfig(){#{{{
         dir      =>  $dir,
         hardlink =>  $hardlink,
         enc      =>  $encrypt
-    );
+    );#}}}
     $config{"localdir"}=glob($config{"localdir"});
 
     # Determine password for ftp-connection
-    if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {#{{{
+	#if ((!defined($config{'pass'})) or ($config{'pass'} eq "") or ($config{'user'} ne "anonymous") ) {#{{{
+    if ((!defined($config{'pass'})) or ($config{'pass'} eq "")) {#{{{
         ReadMode('noecho');
         print "No Password has been given, \nplease type password for user $config{'user'}: ";
         $config{'password'} = ReadLine(0);
@@ -542,6 +547,41 @@ sub RsyncBackupDirs{#{{{
     my $status = $rsync->status;
     return 1;
 }#}}}
+
+sub parseCmdline{#{{{
+	# sane defaults, if everthing fails, these will be used
+	my $user         = "anonymous";
+	my $pass         = 'none@none.invalid';
+	# Welches Directory downloaden
+	my $dir          = ".";
+
+	my $uri = shift(@_);
+	if (!defined($uri) or $uri eq "") {
+		die "[error] No Server specified, nothing to do, exiting....\n";
+	}
+	my $user1, my $host, my $pass1, my $dir1;
+	# now we have 4 fields: 1: ftp://
+	#                       2: <null>
+	#                       3: server (possibly including user and password information)
+	#                       4: directory
+	my @a_uri    = split /\//,$uri, 4;
+	( $user1,  $pass1,  $host) = ( $a_uri[2]  =~ /(?:([^:@]*)(?::([^@]*))?@)?(.*)/);
+	if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
+		 $dir1         = $a_uri[3];
+	}
+    if ((!defined($pass1)) && defined($user1) && ($user1 ne $user)  ) {#{{{
+        ReadMode('noecho');
+        print "No Password has been given, \nplease type password for user $user1: ";
+        chomp($pass1 = ReadLine(0));
+        print "\n";
+        ReadMode('restore');
+    }#}}}
+	($user, $pass, $dir) = 	(defined($user1)?$user1:$user, 
+							 defined($pass1)?$pass1:$pass,
+							 defined($dir1)?$dir1:$dir);
+	return  ($user, $pass, $host, $dir);
+}#}}}
+
 
 
 # vim: set fdm=marker fdl=0:
