@@ -6,13 +6,13 @@
 
 - make script configurable using ~/.ftpbackuprc
 
-- signal handling (clean up temporary directory, when interrupted)
 
 - enable different storage methods. We are already using rsync, so how
   backing up to an rsync server?
 
 
 # Resolved items (hopefully ;)
-use gpg to encrypt files locally
-use rsync for hardlinking with backup directory
-parse ftp-URI for username/password
+- use gpg to encrypt files locally
+- use rsync for hardlinking with backup directory
+- parse ftp-URI for username/password
+- signal handling (clean up temporary directory, when interrupted)

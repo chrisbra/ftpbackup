@@ -165,8 +165,6 @@ When run several times a day for the same ftp server, B<ftpbackup> will
 happily overwrite already existing files.
 B<ftpbackup> does not yet take care of the permissions on the server. So it
 will create all files as the current user with the default umask.
-When interrupted and the option I<--hardlink> is used, it will not clean up
-already downloaded files.
 
 =head1 AUTHOR
 
