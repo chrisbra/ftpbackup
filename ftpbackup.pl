@@ -240,6 +240,15 @@ if ($config{'hardlink'}){
     chdir $tdir;
 	mkdir $backup_dir;
 }
+$SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = sub { 
+	if ( -d $tdir ){
+		deltree $tdir; 
+	}
+	if ( -d $backup_dir) {
+		deltree $backup_dir;
+	}
+	die "Unexpected signal, quitting...\n";
+}
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
