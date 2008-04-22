@@ -46,17 +46,23 @@ my $ftp=FTPinit();
 
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'server'});
 my $lsrc = FTPcheckOldVers(\@temp);
-$lsrc=abs_path($$lsrc[0]);
+if (@$lsrc >= 1){
+	$lsrc=abs_path($$lsrc[0]);
+}
+else {
+	$lsrc = undef;
+}
 
 my $backup_dir = FTPinitLocal();
 vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
 # change relative path of $backup_dir to absolute path
-$backup_dir = getcwd();
+my $final_backup_dir = getcwd();
 
 my $tdir;
 if ($config{'hardlink'}){
     $tdir  = tempdir();
     chdir $tdir;
+	mkdir $backup_dir;
 }
 
 @temp = FTPlist($ftp, $config{'dir'});
@@ -73,9 +79,7 @@ if ($config{'delftp'}) {
 $ftp->quit;
 
 if ($config{'hardlink'}){
-    print "link_src: $lsrc\n";
-#    my $temp = abs_path($$lsrc[0]);
-    RsyncBackupDirs($tdir, $lsrc, $backup_dir);
+    RsyncBackupDirs($tdir, $final_backup_dir, $lsrc);
     deltree($tdir);
 }
 
@@ -124,12 +128,14 @@ sub FTPgetFiles {#{{{
             $config{'statistics'}->{'files'}+=1;
             $config{'statistics'}->{'size'}+=$files[4];
             $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
+			my $mtime = $ftp->mdtm($files[8]);
             vprint("Could not download $files[8] $!", "error") unless (defined($status));
             if ($config{'enc'}){
                 vprint( "Encrypting file $files[8]", "debug");
                 my $s = GPGencrypt($files[8]) if ($config{'enc'});
                 vprint("Could not encrypt $files[8] $!", "error") unless (defined($s));
             }
+			utime $mtime, $mtime, ($files[8]);
         }
     }
     chdir ".." && $ftp->cdup();
@@ -212,7 +218,7 @@ sub FTPinitLocal{#{{{
     # Datum im Format YYYYMMDD
     (my $mday, my $mon, my $year) = (localtime(time))[3,4,5];
     # Test for existance of directory
-    my $dir = $year+1900 . sprintf("%02d",$mon+1) . $mday;
+    my $dir = $year+1900 . sprintf("%02d",$mon+1) . sprintf("%02d", $mday);
     if (-d $config{"localdir"} . $config{"ospath"}.$dir) {
         vprint( "Directory '$dir' already exists in $config{'localdir'}", "debug");
     }
@@ -504,7 +510,7 @@ return $passphrase;
 
 sub RsyncBackupDirs{#{{{
     # src, hardlink_src, destination
-    (my $src, my $lsrc, my $dest) = @_;
+    (my $src, my $dest, my $lsrc) = @_;
     # archive sets some defaults, but for reference we include all options.
     # see rsync(1)
     # --archive sets:
@@ -522,11 +528,15 @@ sub RsyncBackupDirs{#{{{
     # --sparse           # handle sparse files efficiently
     # --link-dest        # hardlink files with $dir
     no strict "subs";
-    my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src."/", "dest" => $dest."/", "link-dest" => $lsrc});
-    #my $cmd = $rsync->getcmd();
-    #foreach (@$cmd) {
-    #    print "$_\n";
-    #}
+    my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src.$config{'ospath'}, "dest" => $dest.$config{'ospath'}});
+	if (defined($lsrc)){
+		vprint("Trying to hardlink files with $lsrc", "debug");
+		$rsync->defopts({"link-dest" => $lsrc.$config{'ospath'}});
+	}
+    my $cmd = $rsync->getcmd();
+    foreach (@$cmd) {
+        print "$_\n";
+    }
     #$rsync->exec({ src => $src, dest => $dest}) or print "[error] Rsync call failed, aborting ...\n";
     $rsync->exec or print "[error] Rsync call failed, aborting ...\n";
     my $status = $rsync->status;
