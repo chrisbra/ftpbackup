@@ -37,7 +37,7 @@ password=none@none.invalid).
 
 Use active connection mode. (Default is passive).
 
-=item B<--archivedir>=I<dir>       
+=item B<--destination>=I<dir>       
 
 Store the backups below I<dir>. Foreach run B<ftpbackup> will create
 a directory in the date format 'YYYYMMDD' (as B<date +'%Y%m%d>' would
@@ -177,6 +177,7 @@ Licensed under the GNU GPL.
 # Subversion Properties:
 # $Id$
 
+# Modules#{{{
 use strict;
 use warnings;
 # obviously we need a ftp module
@@ -191,9 +192,9 @@ use Term::ReadKey;
 use File::Temp qw /tempdir/ ;
 #use File::Spec::Functions;
 #use Cwd ;
-use Cwd  qw / abs_path getcwd / ;
+use Cwd  qw / abs_path getcwd / ;#}}}
 
-# Function prototypes
+# Function prototypes#{{{
 sub usage;
 sub vprint;
 sub getConfig;
@@ -207,84 +208,112 @@ sub printStats;
 sub GPGencrypt;
 sub GPGdetPassphrase;
 sub RsyncBackupDirs;
-sub showVersion;
+sub FTPRemoteCheckOldVers;
+sub isFTP;
+sub FTPinitRemote;
+sub showVersion;#}}}
 
-# This is main:
+# This is main:#{{{
 
 my $DEBUG  = 1;
+# turn off buffering
+local $|   = 1;
 my $VERSION  = 0.3;
 our %config;
 $config{'debug'} = $DEBUG;
 %config = getConfig();
 
-vprint("Loggin into Server: $config{'server'} as $config{'user'}", "debug");
-my $ftp=FTPinit();
-
-my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'server'});
-my $lsrc = FTPcheckOldVers(\@temp);
-if (@$lsrc >= 1){
-    $lsrc=abs_path($$lsrc[0]);
+vprint("Loggin into Server: $config{'sftp'}->{'server'} as $config{'sftp'}->{'user'}", "debug");
+my $sftp=FTPinit($config{'sftp'});
+my @temp, my $backup_dir, my $dftp;
+my $tdir, my $final_backup_dir, my $lsrc;
+# Open second connection for destination ftp server
+if (defined($config{'dftp'})){
+    $dftp = FTPinit($config{'dftp'});
+    $dftp->cwd($config{'dftp'}->{'dir'}) or die "[error]: Could not enter destination-directory: ", $dftp->message;
+    FTPRemoteCheckOldVers($config{'dftp'},$config{'sftp'}->{'server'});
+    my $port = $sftp->pasv();
+    $dftp->port($port);
+    FTPinitRemote($dftp);
 }
+
 else {
-    $lsrc = undef;
-}
-
-my $backup_dir = FTPinitLocal();
-vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
+    @temp = glob($config{'sftp'}->{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'sftp'}->{'server'});
+    $lsrc = FTPcheckOldVers(\@temp);
+    if (@$lsrc >= 1){
+        $lsrc=abs_path($$lsrc[0]);
+    }
+    else {
+        $lsrc = undef;
+    }
+    $backup_dir = FTPinitLocal();
+    vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
 # change relative path of $backup_dir to absolute path
-my $final_backup_dir = getcwd();
+    $final_backup_dir = getcwd();
 
-my $tdir;
-if ($config{'hardlink'}){
-    $tdir  = tempdir();
-    chdir $tdir;
-    mkdir $backup_dir;
+    if ($config{'hardlink'}){
+        $tdir  = tempdir();
+        chdir $tdir;
+        mkdir $backup_dir;
+    }
+    $SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = sub { 
+        if ( -d $tdir ){
+            deltree $tdir; 
+        }
+        if ( -d $backup_dir) {
+            deltree $backup_dir;
+        }
+        die "Unexpected signal, quitting...\n";
+    };
 }
-$SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = sub { 
-    if ( -d $tdir ){
-        deltree $tdir; 
-    }
-    if ( -d $backup_dir) {
-        deltree $backup_dir;
-    }
-    die "Unexpected signal, quitting...\n";
-};
 
-@temp = FTPlist($ftp, $config{'dir'});
-chdir $backup_dir;
-unless (FTPgetFiles($ftp, \@temp, $config{'dir'} )){
-    $ftp->quit;
-    die "[error] Some error occured, aborting...",$ftp->message;
-}
+
+@temp = FTPlist($sftp, $config{'sftp'}->{'dir'});
+chdir $backup_dir unless defined($config{'dftp'});
+
+FTPgetFiles($sftp, \@temp, $config{'sftp'}->{'dir'}, (defined($dftp)) ? $dftp : undef );
+
 if ($config{'delftp'}) {
-     vprint( "Trying to delete $config{'dir'} on server", "debug");
-     $ftp->rmdir($config{'dir'}) or 
-     die "[error] Could not delete $config{'dir'}\n", $ftp->message;
+     vprint( "Trying to delete $config{'sftp'}->{'dir'} on server", "debug");
+     $sftp->rmdir($config{'sftp'}->{'dir'}) or 
+     die "[error] Could not delete $config{'sftp'}->{'dir'}\n", $sftp->message;
  }
-$ftp->quit;
+$sftp->quit;
+if (defined($dftp)){
+    $dftp->quit;
+}
 
-if ($config{'hardlink'}){
-    RsyncBackupDirs($tdir, $final_backup_dir, $lsrc);
-    deltree($tdir);
+unless (defined($config{'dftp'})){
+    if ($config{'hardlink'}){
+        RsyncBackupDirs($tdir, $final_backup_dir, $lsrc);
+        deltree($tdir);
+    }
 }
 
 printStats if $config{'stats'};
 
-# Finished
-
+# Finished#}}}
 
 sub FTPgetFiles {#{{{
-    (my $ftp, my $list, my $ldir) = @_;
-    mkdir $ldir unless -d $ldir;
-    chdir $ldir;
+    (my $ftp, my $list, my $ldir, my $dftp) = @_;
+    unless (defined($dftp)){
+        mkdir $ldir unless -d $ldir;
+        chdir $ldir;
+    }
     foreach ( split /$config{'ospath'}/, $ldir){
         vprint( "Enter directory: $_", "debug");
         if ( not $ftp->cwd($_)) {
-            vprint( "Could not enter directory: $_", "error");
-            return(0);
+            die "[error] Could not enter directory: $_", $ftp->message;
+        }
+        if (defined($dftp)){
+            next if ($_ =~ /^\.$/);
+            # using an anonymous array as reference
+            unless (FTPDirMatchPattern([$dftp->dir()],$_)){
+                $dftp->mkdir($_) or die "[error]: Could not create $_ on destination ftp server ", $dftp->message;
+            }
+            $dftp->cwd($_) or die "[error]: Could not enter $_ on destination ftp server ", $dftp->message;
         }
     }
-    my $status=1;
     LIST: foreach (@$list){
         my $skip = 0;
         my $xpattern;
@@ -305,45 +334,58 @@ sub FTPgetFiles {#{{{
             vprint( "Downloading directory $files[8]", "debug");
             $config{'statistics'}->{'dirs'}+=1;
             my @temp = $ftp->dir($files[8]);
-            $status = FTPgetFiles($ftp, \@temp, $files[8]);
+            FTPgetFiles($ftp, \@temp, $files[8], (defined($dftp)) ? $dftp : undef);
         }
         # download files
         else {
             vprint( "Downloading file $files[8]", "debug");
             $config{'statistics'}->{'files'}+=1;
             $config{'statistics'}->{'size'}+=$files[4];
-            $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
-            my $mtime = $ftp->mdtm($files[8]);
-            vprint("Could not download $files[8] $!", "error") unless (defined($status));
-            if ($config{'enc'}){
-                vprint( "Encrypting file $files[8]", "debug");
-                my $s = GPGencrypt($files[8]) if ($config{'enc'});
-                vprint("Could not encrypt $files[8] $!", "error") unless (defined($s));
+            unless (defined($dftp)){
+                $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
+                my $mtime = $ftp->mdtm($files[8]);
+                if ($config{'enc'}){
+                    vprint( "Encrypting file $files[8]", "debug");
+                    my $s = GPGencrypt($files[8]) if ($config{'enc'});
+                    die "Could not encrypt $files[8] $!";
+                }
+                utime $mtime, $mtime, ($files[8]);
             }
-            utime $mtime, $mtime, ($files[8]);
+            else {
+                $ftp->pasv_xfer($files[8], $dftp) or die "[error] Uploading to destination ftp server failed: ", $dftp->message;
+            }
         }
     }
-    chdir ".." && $ftp->cdup();
-    return($status);
+    if (defined($dftp)){
+        $dftp->cdup();
+    }
+    else{
+        chdir ".."
+    }
+    $ftp->cdup();
 }#}}}
 
 sub FTPinit {#{{{
+    my $ftpc = shift;
+    my %ftpcon = %{$ftpc};
     # This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
-    my $ftp = Net::FTP->new($config{"server"}, Passive => $config{"active"}) or die "[error] Cannot connect to $config{'server'}";
-    vprint( "successfull logged into Server $config{'server'}", "debug");
-    $ftp->login($config{"user"}, $config{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
+    my $ftp = Net::FTP->new($ftpcon{"server"}) or die "[error] Cannot connect to $ftpcon{'server'}";
+    vprint( "successfull logged into Server $ftpcon{'server'}", "debug");
+    $ftp->login($ftpcon{"user"}, $ftpcon{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
      # enable binary mode, if configured
-    if($config{"binary"}){
+    if($ftpcon{"binary"}){
         $ftp->binary;
         vprint( "Changed connection to binary mode", "debug");
     }
-    # Check local Backup Directory
-    eval { 
-        mkdir $config{"localdir"} unless (-d $config{"localdir"}); 
-        chmod 0700, $config{"localdir"} unless (-w $config{"localdir"});
-    };
-    if ($@) {
-        die "[error] Setting up Backup Directory $config{'localdir'}, exiting..."
+    if (defined($config{'dftp'})){
+        # Check local Backup Directory
+        eval { 
+            mkdir $config{"localdir"} unless (-d $config{"localdir"}); 
+            chmod 0700, $config{"localdir"} unless (-w $config{"localdir"});
+        };
+        if ($@) {
+            die "[error] Setting up Backup Directory $config{'localdir'}, exiting..."
+        }
     }
     return $ftp;
 }#}}}
@@ -375,7 +417,7 @@ Option:
 --passfile='file'      When encrypting the files locally using gnupg, 
                        use the password found in file as symmetric
                        passphrase.
---archivedir=dir       Save downloaded files in dir (default: current 
+--destination=dir      Save downloaded files in dir (default: current 
                        directory)
 --removesrc            Try to remove the directory on the FTP server
                        when finished.
@@ -507,12 +549,11 @@ sub getConfig(){#{{{
                'version'   => sub {showVersion},
                'server=s'  => \$host,
                'recursion!'=> \$recursive,
-               'port=i'    => \$port,
                'active'    => \$active,
                'debug'     => \$debug,
                'statistics'=> \$stats,
                'binary'    => \$binary,
-               'archivedir=s' => \$localdir,
+               'destination=s' => \$localdir,
                'passfile=s'  => \$passfile,
                'keep=i'    => \$keep,
                'removesrc' => \$delete_source,
@@ -520,22 +561,26 @@ sub getConfig(){#{{{
                'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
-( $user, $password, $host, $dir ) = parseCmdline(@ARGV);
+    ( $user, $password, $host, $dir ) = parseCmdline(@ARGV);
 
-# Only for testing purposes
-#print "user: $user\n";
-#print "password: $password\n";
-#print "host: $host\n";
-#print "dir: $dir\n";
-#die "exit";
 
+## Only for testing purposes
+##print "user: $user\n";
+##print "password: $password\n";
+##print "host: $host\n";
+##print "dir: $dir\n";
+##exit 1;
+
+   my %src_ftp = (
+       user    => $user,
+       pass    => $password,
+       server  => $host,
+       dir     => $dir
+   );
 
     my %config = (#{{{
-        user     =>  $user,
-        pass     =>  $password,
-        server   =>  $host,
+        sftp     =>  \%src_ftp,
         localdir =>  $localdir,
-        port     =>  $port,
         active   =>  $active,
         stats    =>  $stats,
         recursive => $recursive,
@@ -546,20 +591,37 @@ sub getConfig(){#{{{
         exclude  =>  \@exclude,
         statistics => \%statistics,
         delftp   =>  $delete_source,
-        dir      =>  $dir,
         hardlink =>  $hardlink,
         enc      =>  $encrypt
     );#}}}
+
+    my %dst_ftp;
+    if (isFTP($localdir)){
+        ( $user, $password, $host, $dir ) = parseCmdline(($localdir));
+        %dst_ftp = (
+            user     =>  $user,
+            pass     =>  $password,
+            server   =>  $host,
+            dir      =>  $dir
+        );
+        $config{'dftp'}=\%dst_ftp;
+    }
+
+
     $config{"localdir"}=glob($config{"localdir"});
 
     # Determine password for ftp-connection
-    if ((!defined($config{'pass'})) or ($config{'pass'} eq "")) {#{{{
-        ReadMode('noecho');
-        print "No Password has been given, \nplease type password for user $config{'user'}: ";
-        chomp($config{'password'} = ReadLine(0));
-        print "\n";
-        ReadMode('restore');
-    }#}}}
+#    no strict 'refs';
+    foreach my $ftp (( "sftp", "dftp")){
+#        print "$ftp\n";
+        if ((!defined($config{"$ftp"}->{'pass'})) or ($config{"$ftp"}->{'pass'} eq "")) {#{{{
+            ReadMode('noecho');
+            print "No Password has been given, \nplease type password for user $config{'$ftp'}->{'user'}: ";
+            chomp($config{'$ftp'}->{'pass'} = ReadLine(0));
+            print "\n";
+            ReadMode('restore');
+        }#}}}
+    }
 
     if (defined($passfile) and (not $config{'enc'} )){
         vprint("You specified a passwordfile, but did not enable encryption.
@@ -759,6 +821,54 @@ sub showVersion {#{{{
     exit(0);
 }#}}}
 
+sub isFTP {#{{{
+    my $arg = shift;
+    ($arg =~ /^ftp/) ? return 1 : return 0;
+}#}}}
 
+# check on remote server how many versions are available.
+sub FTPRemoteCheckOldVers{
+    my $ftp    = shift;
+    my $server = shift;
+    return 1;
+}
+
+sub FTPinitRemote{#{{{
+    my $ftp   = shift;
+
+    # Datum im Format YYYYMMDD
+    (my $mday, my $mon, my $year) = (localtime(time))[3,4,5];
+    # Test for existance of directory
+    my $dir = $year+1900 . sprintf("%02d",$mon+1) . sprintf("%02d", $mday);
+
+    foreach ($dir,$config{'sftp'}->{'server'},$config{'dftp'}->{'dir'}){ 
+        my @rdir = $ftp->dir() or die "Cannot get Directory listing for destination server ", $ftp->message;
+        print "testing dir: $_\n";
+        if(FTPDirMatchPattern(\@rdir,$_)){
+            $ftp->cwd($_) or die "Cannot change into Directory $_ at destination server ", $ftp->message;
+        }
+        else {
+            $ftp->mkdir($_) or die "Cannot create Directory $_ at destination server ", $ftp->message;
+        }
+    }
+        
+    return 1;
+}#}}}
+
+sub FTPDirMatchPattern{#{{{
+    (my $rdir, my $pattern) = @_;
+#    return 0 if undef($rdir);
+    $pattern = s|/$||;
+#    foreach (@$rdir){
+#        print "$_\n";
+#    }
+    foreach (@$rdir) {
+        next if ($_ !~ /^d/);
+        if ($_ =~ /$pattern/) {
+            return 1;
+        }
+    }
+    return 0;
+}#}}}
 
 # vim: set fdm=marker fdl=0 et:
