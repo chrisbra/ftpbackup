@@ -1,0 +1,14 @@
+ftpbackup (0.3-1) unstable; urgency=low
+
+  * new release (0.3)
+  * Signalhandling works
+  * bugfix: now exclude patterns would not abort the transfer
+    anymore
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 05:36:44 +0200
+
+ftpbackup (0.2-1) unstable; urgency=low
+
+  * Initial release 
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 05:35:43 +0200

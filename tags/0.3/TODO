@@ -1,0 +1,18 @@
+- enable FXP to allow backing up on a different ftp-server
+
+- make use of ~/.netrc
+
+- take care of permissions
+
+- make script configurable using ~/.ftpbackuprc
+
+
+- enable different storage methods. We are already using rsync, so how
+  backing up to an rsync server?
+
+
+# Resolved items (hopefully ;)
+- use gpg to encrypt files locally
+- use rsync for hardlinking with backup directory
+- parse ftp-URI for username/password
+- signal handling (clean up temporary directory, when interrupted)

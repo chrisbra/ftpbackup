@@ -1,0 +1,19 @@
+Source: ftpbackup
+Section: utils
+Priority: optional
+Maintainer: Christian Brabandt <cb@256bit.org>
+Build-Depends: debhelper (>= 5)
+Standards-Version: 3.7.2
+
+Package: ftpbackup
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}
+Recommends: libfile-rsync-perl, libgnupg-perl 
+Description: archive data from an ftp server
+ ftpbackup can be used to create automatic backups from
+ an ftp server. It can use gpg to encrypt the backuped files
+ locally using symmetric encryption. Additionally it can make
+ use of rsync to store several backups space efficiently by
+ hardlinking them.
+ .
+ Homepage: http://www.256bit.org/~chrisbra/cms/index.php?cat=ftpbackup
