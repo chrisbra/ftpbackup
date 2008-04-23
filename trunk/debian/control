@@ -2,8 +2,9 @@ Source: ftpbackup
 Section: utils
 Priority: optional
 Maintainer: Christian Brabandt <cb@256bit.org>
-Build-Depends: debhelper (>= 5)
+Build-Depends: debhelper (>= 6)
 Standards-Version: 3.7.2
+Homepage: http://www.256bit.org/~chrisbra/cms/index.php?cat=ftpbackup
 
 Package: ftpbackup
 Architecture: all
@@ -16,4 +17,3 @@ Description: archive data from an ftp server
  use of rsync to store several backups space efficiently by
  hardlinking them.
  .
- Homepage: http://www.256bit.org/~chrisbra/cms/index.php?cat=ftpbackup

@@ -1,6 +1,11 @@
 #!/usr/bin/make -f
+DOC=TODO changelog Changelog README INSTALL
 
-build: build-stamp
+build: build-stamp doc
+
+doc:
+	for i in ${DOC}; do cp -u $$i debian/; done || true;
+
 build-stamp:
 	dh_testdir
 	$(MAKE)
@@ -21,7 +26,8 @@ binary-indep: build
 	dh_clean -k
 	dh_installdirs
 	$(MAKE) PREFIX=debian/ftpbackup INSTALL_BIN=install install
-	dh_installdocs
+	dh_install
+	dh_installdocs README TODO
 	dh_installchangelogs
 	dh_perl
 	dh_strip

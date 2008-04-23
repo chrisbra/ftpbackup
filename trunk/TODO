@@ -1,4 +1,4 @@
-- enable FXP to allow backing up on a different ftp-server
+- enable FXP to allow backing up to a different ftp-server
 
 - make use of ~/.netrc
 
@@ -6,9 +6,14 @@
 
 - make script configurable using ~/.ftpbackuprc
 
-
 - enable different storage methods. We are already using rsync, so how
   backing up to an rsync server?
+
+- make debug levels configurable (using -v switch)
+
+- make ftp-url parser more robust
+
+- Rewrite using OO paradigma (%config is already used as object).
 
 
 # Resolved items (hopefully ;)
