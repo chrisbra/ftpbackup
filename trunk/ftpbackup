@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-
+#{{{
 =head1 NAME
 
 ftpbackup - backup from an ftp server
@@ -155,7 +155,7 @@ Download all files in directory knoppix on the kernel server and locally
 encrypting the files. When storing the files locally try to hardlink the files
 with an older backup if one exists. But keep only 5 versions locally. (The
 oldest one will be deleted.) Hardlinking obviously only works, when you
-encrypt with the same passphrase every time.
+encrypt with the same passphrase every time and there are older backups.
 
 =back
 
@@ -173,7 +173,7 @@ Copyright 2008 by Christian Brabandt <cb@256bit.org>
 Licensed under the GNU GPL.
 
 =cut
-
+#}}}
 # Subversion Properties:
 # $Id$
 
@@ -207,10 +207,12 @@ sub printStats;
 sub GPGencrypt;
 sub GPGdetPassphrase;
 sub RsyncBackupDirs;
+sub showVersion;
 
 # This is main:
 
 my $DEBUG  = 1;
+my $VERSION  = 0.3;
 our %config;
 $config{'debug'} = $DEBUG;
 %config = getConfig();
@@ -221,10 +223,10 @@ my $ftp=FTPinit();
 my @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'server'});
 my $lsrc = FTPcheckOldVers(\@temp);
 if (@$lsrc >= 1){
-	$lsrc=abs_path($$lsrc[0]);
+    $lsrc=abs_path($$lsrc[0]);
 }
 else {
-	$lsrc = undef;
+    $lsrc = undef;
 }
 
 my $backup_dir = FTPinitLocal();
@@ -236,17 +238,17 @@ my $tdir;
 if ($config{'hardlink'}){
     $tdir  = tempdir();
     chdir $tdir;
-	mkdir $backup_dir;
+    mkdir $backup_dir;
 }
 $SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = sub { 
-	if ( -d $tdir ){
-		deltree $tdir; 
-	}
-	if ( -d $backup_dir) {
-		deltree $backup_dir;
-	}
-	die "Unexpected signal, quitting...\n";
-}
+    if ( -d $tdir ){
+        deltree $tdir; 
+    }
+    if ( -d $backup_dir) {
+        deltree $backup_dir;
+    }
+    die "Unexpected signal, quitting...\n";
+};
 
 @temp = FTPlist($ftp, $config{'dir'});
 chdir $backup_dir;
@@ -311,14 +313,14 @@ sub FTPgetFiles {#{{{
             $config{'statistics'}->{'files'}+=1;
             $config{'statistics'}->{'size'}+=$files[4];
             $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
-			my $mtime = $ftp->mdtm($files[8]);
+            my $mtime = $ftp->mdtm($files[8]);
             vprint("Could not download $files[8] $!", "error") unless (defined($status));
             if ($config{'enc'}){
                 vprint( "Encrypting file $files[8]", "debug");
                 my $s = GPGencrypt($files[8]) if ($config{'enc'});
                 vprint("Could not encrypt $files[8] $!", "error") unless (defined($s));
             }
-			utime $mtime, $mtime, ($files[8]);
+            utime $mtime, $mtime, ($files[8]);
         }
     }
     chdir ".." && $ftp->cdup();
@@ -354,6 +356,7 @@ sub FTPlist{#{{{
 sub usage{#{{{
     chomp(my $name=`basename $0`);
     print <<EOF;
+$name $VERSION
 Usage: $name [OPTION] URL
 $name takes an FTP account and recursively downloads all files. This can
 be helpful for automatic backups. By default, it will save all files in
@@ -453,16 +456,16 @@ sub getConfig(){#{{{
     
     # Default Options, these can be overruled
     # using commandline optins
-	my $user;
-	my $password;
-	my $host;
-	# Welches Directory downloaden
-	my $dir;
+    my $user;
+    my $password;
+    my $host;
+    # Welches Directory downloaden
+    my $dir;
     my $localdir     = ".";
     # FTP control port
     my $port         = 21;
-    # Enable active mode? 1 enables, 0 disables
-    my $active       = 0;
+    # Enable active mode? 1 disables, 0 enables
+    my $active       = 1;
     # disable statistics
     my $stats        = 0;
     # Enable Recurisve mode? 1 enables, 0 disables
@@ -480,7 +483,7 @@ sub getConfig(){#{{{
     my @exclude      = ();
 
     # Operating System specific
-    my $ospath  = ($Config{"osname"} =~ "MsWin" ) ? '\\' : '/';
+    my $ospath  = ($Config{"osname"} =~ "MSWin" ) ? '\\' : '/';
 
     # Statistics Hash
     my %statistics  =  (
@@ -501,6 +504,7 @@ sub getConfig(){#{{{
     my $hardlink = 0;
 
     GetOptions('help'      => sub {usage}, #{{{
+               'version'   => sub {showVersion},
                'server=s'  => \$host,
                'recursion!'=> \$recursive,
                'port=i'    => \$port,
@@ -510,7 +514,7 @@ sub getConfig(){#{{{
                'binary'    => \$binary,
                'archivedir=s' => \$localdir,
                'passfile=s'  => \$passfile,
-			   'keep=i'	   => \$keep,
+               'keep=i'    => \$keep,
                'removesrc' => \$delete_source,
                'encrypt'   => \$encrypt,
                'hardlink'  => \$hardlink,
@@ -702,10 +706,10 @@ sub RsyncBackupDirs{#{{{
     # --link-dest        # hardlink files with $dir
     no strict "subs";
     my $rsync = File::Rsync->new({ "archive" => 1, "hard-links" => 1, "sparse" => 1, "src" => $src.$config{'ospath'}, "dest" => $dest.$config{'ospath'}});
-	if (defined($lsrc)){
-		vprint("Trying to hardlink files with $lsrc", "debug");
-		$rsync->defopts({"link-dest" => $lsrc.$config{'ospath'}});
-	}
+    if (defined($lsrc)){
+        vprint("Trying to hardlink files with $lsrc", "debug");
+        $rsync->defopts({"link-dest" => $lsrc.$config{'ospath'}});
+    }
     my $cmd = $rsync->getcmd();
     foreach (@$cmd) {
         print "$_\n";
@@ -717,26 +721,26 @@ sub RsyncBackupDirs{#{{{
 }#}}}
 
 sub parseCmdline{#{{{
-	# sane defaults, if everthing fails, these will be used
-	my $user         = "anonymous";
-	my $pass         = 'none@none.invalid';
-	# Welches Directory downloaden
-	my $dir          = ".";
+    # sane defaults, if everthing fails, these will be used
+    my $user         = "anonymous";
+    my $pass         = 'none@none.invalid';
+    # Welches Directory downloaden
+    my $dir          = ".";
 
-	my $uri = shift(@_);
-	if (!defined($uri) or $uri eq "") {
-		die "[error] No Server specified, nothing to do, exiting....\n";
-	}
-	my $user1, my $host, my $pass1, my $dir1;
-	# now we have 4 fields: 1: ftp://
-	#                       2: <null>
-	#                       3: server (possibly including user and password information)
-	#                       4: directory
-	my @a_uri    = split /\//,$uri, 4;
-	( $user1,  $pass1,  $host) = ( $a_uri[2]  =~ /(?:([^:@]*)(?::([^@]*))?@)?(.*)/);
-	if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
-		 $dir1         = $a_uri[3];
-	}
+    my $uri = shift(@_);
+    if (!defined($uri) or $uri eq "") {
+        die "[error] No Server specified, nothing to do, exiting....\n";
+    }
+    my $user1, my $host, my $pass1, my $dir1;
+    # now we have 4 fields: 1: ftp://
+    #                       2: <null>
+    #                       3: server (possibly including user and password information)
+    #                       4: directory
+    my @a_uri    = split /\//,$uri, 4;
+    ( $user1,  $pass1,  $host) = ( $a_uri[2]  =~ /(?:([^:@]*)(?::([^@]*))?@)?(.*)/);
+    if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
+         $dir1         = $a_uri[3];
+    }
     if ((!defined($pass1)) && defined($user1) && ($user1 ne $user)  ) {#{{{
         ReadMode('noecho');
         print "No Password has been given, \nplease type password for user $user1: ";
@@ -744,12 +748,17 @@ sub parseCmdline{#{{{
         print "\n";
         ReadMode('restore');
     }#}}}
-	($user, $pass, $dir) = 	(defined($user1)?$user1:$user, 
-							 defined($pass1)?$pass1:$pass,
-							 defined($dir1)?$dir1:$dir);
-	return  ($user, $pass, $host, $dir);
+    ($user, $pass, $dir) =  (defined($user1)?$user1:$user, 
+                             defined($pass1)?$pass1:$pass,
+                             defined($dir1)?$dir1:$dir);
+    return  ($user, $pass, $host, $dir);
+}#}}}
+
+sub showVersion {#{{{
+    print "Version: $VERSION\n";
+    exit(0);
 }#}}}
 
 
 
-# vim: set fdm=marker fdl=0:
+# vim: set fdm=marker fdl=0 et:
