@@ -828,9 +828,11 @@ sub isFTP {#{{{
 
 # check on remote server how many versions are available.
 sub FTPRemoteCheckOldVers{
+
     my $ftp    = shift;
     my $server = shift;
     return 1;
+
 }
 
 sub FTPinitRemote{#{{{
