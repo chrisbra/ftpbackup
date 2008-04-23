@@ -1,5 +1,8 @@
 #!/usr/bin/perl
-#{{{
+# Subversion Properties:
+# $Id$
+
+# Perl POD documentation {{{
 =head1 NAME
 
 ftpbackup - backup from an ftp server
@@ -174,8 +177,6 @@ Licensed under the GNU GPL.
 
 =cut
 #}}}
-# Subversion Properties:
-# $Id$
 
 # Modules#{{{
 use strict;
@@ -293,6 +294,8 @@ unless (defined($config{'dftp'})){
 printStats if $config{'stats'};
 
 # Finished#}}}
+
+# Procedures#{{{
 
 sub FTPgetFiles {#{{{
     (my $ftp, my $list, my $ldir, my $dftp) = @_;
@@ -826,14 +829,14 @@ sub isFTP {#{{{
     ($arg =~ /^ftp/) ? return 1 : return 0;
 }#}}}
 
-# check on remote server how many versions are available.
+# check on remote server how many versions are available.#{{{
 sub FTPRemoteCheckOldVers{
 
     my $ftp    = shift;
     my $server = shift;
     return 1;
 
-}
+}#}}}
 
 sub FTPinitRemote{#{{{
     my $ftp   = shift;
@@ -871,6 +874,6 @@ sub FTPDirMatchPattern{#{{{
         }
     }
     return 0;
-}#}}}
+}#}}}#}}}
 
 # vim: set fdm=marker fdl=0 et:
