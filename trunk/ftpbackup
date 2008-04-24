@@ -219,7 +219,7 @@ sub showVersion;#}}}
 my $DEBUG  = 1;
 # turn off buffering
 local $|   = 1;
-my $VERSION  = 0.3;
+my $VERSION  = 0.4;
 our %config;
 $config{'debug'} = $DEBUG;
 %config = getConfig();
