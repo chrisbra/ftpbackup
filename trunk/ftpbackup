@@ -232,7 +232,7 @@ my $tdir, my $final_backup_dir, my $lsrc;
 if (defined($config{'dftp'})){
     $dftp = FTPinit($config{'dftp'});
     $dftp->cwd($config{'dftp'}->{'dir'}) or die "[error]: Could not enter destination-directory: ", $dftp->message;
-    FTPRemoteCheckOldVers($config{'dftp'},$config{'sftp'}->{'server'});
+    FTPRemoteCheckOldVers($dftp,$config{'sftp'}->{'server'});
     my $port = $sftp->pasv();
     $dftp->port($port);
     FTPinitRemote($dftp);
@@ -832,9 +832,40 @@ sub isFTP {#{{{
 # check on remote server how many versions are available.#{{{
 sub FTPRemoteCheckOldVers{
 
+    # check on $ftp for how man version of $server are available
     my $ftp    = shift;
     my $server = shift;
-    return 1;
+
+    #my @temp = $ftp->dir() or die "Cannot get Directory listing for destination ftp server ", $ftp->message;
+    my @temp = $ftp->dir();
+    my $pattern = '\d{8}';
+    my @version, my @temp1, my @files;
+    if (FTPDirMatchPattern(\@temp, $pattern)){
+        @temp1 = grep(/$pattern/, @temp);
+        foreach (@temp1){
+            next unless (/^d/);
+            @files = split / +/, $_, 9;
+            $ftp->cwd($files[8]) or die "Cannot enter Directory $files[8] on destination ftp server ", $ftp->message;
+            if (FTPDirMatchPattern([$ftp->dir()], $server)){
+                    push (@version, "$files[8]/$server");
+            }
+            $ftp->cdup();
+        }
+    }
+    vprint("On remote ftp server I found ".@version." old versions.", "debug");
+    my @sversion = sort @version;
+    while (@version >= $config{'keep'}){
+        @files = split /\//, $sversion[0], 2;
+        $ftp->cwd($files[0]) or die "Cannot enter Directory $files[0] on destination ftp server ", $ftp->message;
+        # delete everything below YYYYMMDD/server directory
+        vprint("Will delete version $files[1] on remote ftp server.", "debug");
+        $ftp->rmdir($files[1], 1) or die "Cannot delete Directory $files[1] on destination ftp server ", $ftp->message;
+        $ftp->cdup();
+        # in case directory YYYYMMDD is no empty, try to remove it
+        vprint("Will delete version $files[0] on remote ftp server.", "debug");
+        $ftp->rmdir($files[0],0);
+        shift @version
+    }
 
 }#}}}
 
@@ -846,26 +877,27 @@ sub FTPinitRemote{#{{{
     # Test for existance of directory
     my $dir = $year+1900 . sprintf("%02d",$mon+1) . sprintf("%02d", $mday);
 
-    foreach ($dir,$config{'sftp'}->{'server'},$config{'dftp'}->{'dir'}){ 
-        my @rdir = $ftp->dir() or die "Cannot get Directory listing for destination server ", $ftp->message;
-        print "testing dir: $_\n";
-        if(FTPDirMatchPattern(\@rdir,$_)){
-            $ftp->cwd($_) or die "Cannot change into Directory $_ at destination server ", $ftp->message;
-        }
-        else {
+    foreach ($dir,$config{'sftp'}->{'server'},$config{'sftp'}->{'dir'}){ 
+        #my @rdir = $ftp->dir() or die "Cannot get Directory listing for destination server ", $ftp->message;
+        next if (/^\.$/);
+        my @rdir = $ftp->dir();
+#        print "testing dir: $_\n";
+        if(!FTPDirMatchPattern(\@rdir,$_)){
             $ftp->mkdir($_) or die "Cannot create Directory $_ at destination server ", $ftp->message;
         }
+        $ftp->cwd($_);
     }
         
     return 1;
 }#}}}
 
 sub FTPDirMatchPattern{#{{{
-    (my $rdir, my $pattern) = @_;
-#    return 0 if undef($rdir);
-    $pattern = s|/$||;
-#    foreach (@$rdir){
-#        print "$_\n";
+    (my $rdir, my $pattern, my $one) = @_;
+    $pattern =~ s/\/$//;
+#    if (defined($one)){
+#        foreach (@$rdir){
+#            print "$_\n";
+#        }
 #    }
     foreach (@$rdir) {
         next if ($_ !~ /^d/);
