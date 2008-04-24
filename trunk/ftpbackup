@@ -27,7 +27,7 @@ than 3 backup-version, look at the B<--keep> option.
 Additionally B<ftpbackup> can try to hardlink each backup with the
 previous version similar to how rsync does it (in fact, it uses rsync
 for hardlinking the data). B<ftpbackup> can also encrypt each downloaded
-file using C<gpg --encrypt --symmetric>. 
+file using C<gpg --symmetric>. 
 
 If no username/password is specified, B<ftpbackup> will try to
 authenticat using anonymous logins (this means username=anonymous,
