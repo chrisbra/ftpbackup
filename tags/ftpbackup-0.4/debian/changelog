@@ -1,0 +1,19 @@
+ftpbackup (0.3-1) unstable; urgency=low
+
+  * new release (0.3)
+  * Signalhandling works
+  * bugfix: now exclude patterns would not abort the transfer
+    anymore
+  * svn-release: # $Id: ftpbackup 54 2008-04-23 15:14:13Z cb $
+  * tagged version 0.3
+  * prints version information when --version switch is used
+  * small documentation changes
+
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 12:01:31 +0200
+
+ftpbackup (0.2-1) unstable; urgency=low
+
+  * Initial release 
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 05:35:43 +0200

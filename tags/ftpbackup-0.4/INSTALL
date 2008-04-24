@@ -1,0 +1,48 @@
+ftpbackup 0.4
+
+ftpbackup is a perlscript that lets you backup your data from an ftp host.
+
+To run, you need perl (obviously), any recent version should do, at least 5.8
+Additionally you'll need the following modules:
+
+1. Requirements
+================================================
+Those should be included in your Perl distribution:
+--------------------------------------------------
+Getopt::Long
+Config
+
+While these modules you might have to install additionally using your 
+distribution or cpan(1)
+--------------------------------------------------
+Net::FTP
+Net::Netrc
+Term::ReadKey
+File::Temp
+Cwd
+
+
+And you only need these modules, if you would like to 
+encrypt you backups (GnuPG) or hardlink them (rsync).
+In order for them to work, you'll also need rsync and gnupg
+--------------------------------------------------
+GnuPG
+File::Rsync
+
+
+
+2. Installation
+================================================
+Once you have all dependencies installed, 
+installation should be a simple matter of 
+make
+make install
+
+By default this will install ftpbackup into /usr/local.
+If you want it to be installed differently, export the environment
+variable PREFIX. So to install everything in /usr you should do (bash assumed):
+export PREFIX=/usr
+make
+install
+
+You'll probably need root permissions to install into /usr, though.
