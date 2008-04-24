@@ -1,0 +1,47 @@
+ftpbackup (0.4.1-1) unstable; urgency=low
+
+  * new release (0.4.1)
+  * documentation improvements (added note about .netrc usage)
+  * svn-id: $Id: ftpbackup 70 2008-04-24 19:43:06Z cb $
+
+ -- Christian Brabandt <chrisbra@t41.local>  Thu, 24 Apr 2008 05:58:37 +0200
+
+ftpbackup (0.4-1) unstable; urgency=low
+
+  * new release (0.4)
+  * new feature: implements File Exchange Protocol. This allows to
+    transfer data from one FTP server to another server, without
+    storing the data on the system ftpbackup runs.
+  * new feature: ftpbackup can make use of an existing .netrc
+    to determine username and password. This way other users won't be
+    able to detect your credentials when looking into the process
+    list.
+  * documentation updates
+  * some small bugs have been fixed
+  * by default print warnings, even if --debug has not been specified
+  * improved signal handling. Before, old files may have left, in case
+    ftpbackup has been interrupted.
+  * svn-id: $Id: ftpbackup 66 2008-04-24 17:29:33Z cb $
+  * changed compat level to 5
+
+ -- Christian Brabandt <chrisbra@t41.local>  Thu, 24 Apr 2008 05:56:48 +0200
+
+ftpbackup (0.3-1) unstable; urgency=low
+
+  * new release (0.3)
+  * Signalhandling works
+  * bugfix: now exclude patterns would not abort the transfer
+    anymore
+  * svn-release: # $Id: ftpbackup 54 2008-04-23 15:14:13Z cb $
+  * tagged version 0.3
+  * prints version information when --version switch is used
+  * small documentation changes
+
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 12:01:31 +0200
+
+ftpbackup (0.2-1) unstable; urgency=low
+
+  * Initial release 
+
+ -- Christian Brabandt <cb@256bit.org>  Wed, 23 Apr 2008 05:35:43 +0200
