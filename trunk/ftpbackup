@@ -13,9 +13,9 @@ B<ftpbackup> [B<Options>] I<URL>
 
 =head1 DESCRIPTION
 
-B<ftpbackup> allows to backup all files from an FTP server locally. If no
-local directory is specified, B<ftpbackup> tries to save in the current
-directory. 
+B<ftpbackup> allows to backup all files from an FTP server locally or
+even on another ftp server. If no destination is specified, B<ftpbackup>
+tries to save in the current directory. 
 
 When storing, B<ftpbackup> stores all downloaded files below
 YYYYMMDD/servername, so you can create a nice little hierachical
@@ -23,10 +23,10 @@ storage. For each servername, B<ftpbackup> keeps track of a default of 3
 backups, removing old backups if necessary. If you want to keep more
 than 3 backup-version, look at the B<--keep> option. 
 
-Additionally B<ftpbackup> can try to hardlink each backup with the previous
-version similar to how rsync does it (in fact, it uses rsync for
-hardlinking the data). B<ftpbackup> can also encrypt each downloaded file
-using C<gpg --encrypt --symmetric>. 
+Additionally B<ftpbackup> can try to hardlink each backup with the
+previous version similar to how rsync does it (in fact, it uses rsync
+for hardlinking the data). B<ftpbackup> can also encrypt each downloaded
+file using C<gpg --encrypt --symmetric>. 
 
 If no username/password is specified, B<ftpbackup> will try to
 authenticat using anonymous logins (this means username=anonymous,
@@ -42,15 +42,16 @@ Use active connection mode. (Default is passive).
 
 =item B<--destination>=I<dir>       
 
-Store the backups below I<dir>. Foreach run B<ftpbackup> will create
-a directory in the date format 'YYYYMMDD' (as B<date +'%Y%m%d>' would
-create it) and below that directory a directory of the I<server>. 
-(e.g. when running on Apr. 4th, 2008 and backing up kernel.org,
-B<ftpbackup> would create a directory structure I<20080404/kernel.org/>)
+Store the backups below I<dir>. Foreach run B<ftpbackup> will create a
+directory in the date format 'YYYYMMDD' (as B<date +'%Y%m%d>' would
+create it) and below that directory a directory of the I<server>.  (e.g.
+when running on Apr. 4th, 2008 and backing up kernel.org, B<ftpbackup>
+would create a directory structure I<20080404/kernel.org/>)
 
-You can enter a ftp url here as well. In this case, B<ftpbackup> will try
-to make a direct ftp connection from the source ftp server to the destination
-ftp server and copies all data to the destination ftp server directly.
+You can enter a ftp url here as well. In this case, B<ftpbackup> will
+try to make a direct ftp connection from the source ftp server to the
+destination ftp server and copies all data to the destination ftp server
+directly.
 
 =item B<--debug>
 
@@ -64,6 +65,9 @@ path and the perl module B<GnuPG> needs to be installed. If the option
 B<--passfile> is not specified, B<ftpbackup> will interactively ask for
 an encryption password.
 
+Note that B<--encrypt> will not work, when transfering the data to another
+ftp server, since the ftp protocoll does not specify such actions. 
+
 =item B<--exclude=>I<'pattern'>    
 
 Specify an exclude pattern. You can use perl regular expressions (see
@@ -74,10 +78,14 @@ the server, skipping each match.
 =item B<--hardlink>
 
 When storing the data locally, use B<rsync>(1) to store the data.
-Basically this will call B<rsync>(1) I<--archive> I<--hard-links>
-I<--sparse> I<--link-dest=oldbackup> I<src/> I<dest/>
+Basically this will call B<rsync>(1) B<--archive> B<--hard-links>
+B<--sparse> B<--link-dest=oldbackup> I<src/> I<dest/>
 This is handy, when automatically downloading regularly, since that will
 store each version of a file only once.
+
+Note, that hardlinking will not work, when transfering to another
+ftp-server or when trying to encrypt the files. In these cases
+B<ftpbackup> will silently ignore this option.
 
 =item B<-h>, B<--help>
 
@@ -107,7 +115,10 @@ B<--norecursion>
 
 =item B<--removesrc>            
 
-Try to remove the directory on the FTP server when finished.
+Try to remove the directory on the FTP server when finished. This depends
+on the servers configuration and the permissions you have. This happens at 
+the end, after the transfer is finished, so if this fails, you still have
+all data downloaded completely.
 
 =item B<--statistics>           
 
@@ -137,32 +148,30 @@ B<ftpbackup> will simply try to download from the server's root level.
 
 =over 4
 
-=item B<ftpbackup> I<--statistics> ftp://ftp.eu.kernel.org/pub/
+=item B<ftpbackup> B<--statistics> ftp://ftp.eu.kernel.org/pub/
 
 Download all data from ftp.eu.kernel.org/pub using anonymous access.
 When finished print a litte statistic summary.
 
-=item B<ftpbackup> I<--statistics> I<--exclude='\.iso$'>
+=item B<ftpbackup> B<--statistics> B<--exclude='\.iso$'>
 ftp://ftp.eu.kernel.org/pub/
 
 Download all files, except iso images, when finished print a little
 summary.
 
-=item B<ftpbackup> I<--statistics> I<--exclude='\.iso$'> I<--encrypt>
-I<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
+=item B<ftpbackup> B<--statistics> B<--exclude='\.iso$'> B<--encrypt>
+B<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
 
 Download only files in directory knoppix on the kernel server, excluding iso
 images and locally encrypting the files. You will be asked for a password when
 run.
 
-=item B<ftpbackup> I<--hardlink> I<--encrypt> I<--keep=5>
-I<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
+=item B<ftpbackup> B<--destination=ftp://servername/dir> B<--keep=5>
+B<--norecursion> ftp://ftp.eu.kernel.org/pub/dist/knoppix
 
-Download all files in directory knoppix on the kernel server and locally
-encrypting the files. When storing the files locally try to hardlink the files
-with an older backup if one exists. But keep only 5 versions locally. (The
-oldest one will be deleted.) Hardlinking obviously only works, when you
-encrypt with the same passphrase every time and there are older backups.
+Download all files in directory knoppix on the kernel server and transfer them
+to the ftp server servername. All data will be stored in the directory dir.
+If more than 4 versions exist, the oldest versions will be deleted.
 
 =back
 
@@ -187,6 +196,8 @@ use strict;
 use warnings;
 # obviously we need a ftp module
 use Net::FTP;
+# parse users Netrc
+use Net::Netrc;
 # commandline parsing
 use Getopt::Long;
 # access perl-variables
@@ -243,7 +254,7 @@ if (defined($config{'dftp'})){
 }
 
 else {
-    @temp = glob($config{'sftp'}->{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'sftp'}->{'server'});
+    @temp = glob($config{'localdir'} . $config{'ospath'} . "20*" . $config{'ospath'} . $config{'sftp'}->{'server'});
     $lsrc = FTPcheckOldVers(\@temp);
     if (@$lsrc >= 1){
         $lsrc=abs_path($$lsrc[0]);
@@ -252,7 +263,7 @@ else {
         $lsrc = undef;
     }
     $backup_dir = FTPinitLocal();
-    vprint( "Backing up $config{'dir'} into Directory: $backup_dir", "debug");
+    vprint( "Backing up $config{'sftp'}->{'dir'} into Directory: $backup_dir", "debug");
 # change relative path of $backup_dir to absolute path
     $final_backup_dir = getcwd();
 
@@ -352,12 +363,12 @@ sub FTPgetFiles {
             unless (defined($dftp)){
                 $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
                 my $mtime = $ftp->mdtm($files[8]);
+                utime $mtime, $mtime, ($files[8]);
                 if ($config{'enc'}){
                     vprint( "Encrypting file $files[8]", "debug");
-                    my $s = GPGencrypt($files[8]) if ($config{'enc'});
-                    die "Could not encrypt $files[8] $!";
+                    GPGencrypt($files[8]);
+                    utime $mtime, $mtime, ($files[8].".gpg");
                 }
-                utime $mtime, $mtime, ($files[8]);
             }
             else {
                 $ftp->pasv_xfer($files[8], $dftp) or die "[error] Uploading to destination ftp server failed: ", $dftp->message;
@@ -379,6 +390,10 @@ sub FTPinit {
     my %ftpcon = %{$ftpc};
     # This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
     my $ftp = Net::FTP->new($ftpcon{"server"}) or die "[error] Cannot connect to $ftpcon{'server'}";
+    if (!defined($config{'dftp'}) and $config{'active'}){
+        vprint("switching to passive mode", "debug");
+        $ftp->pasv();
+    }
     vprint( "successfull logged into Server $ftpcon{'server'}", "debug");
     $ftp->login($ftpcon{"user"}, $ftpcon{"pass"}) or die "[error] Cannot login\n Are Password and Username correct?";
      # enable binary mode, if configured
@@ -465,12 +480,12 @@ sub FTPinitLocal{
         vprint("Cannot create Directory $dir in $config{'localdir'}.", "error");
     }
     chdir $config{"localdir"} . $config{"ospath"} . $dir;
-    unless ( -d $config{"server"}){
-        vprint("Creating directory $config{'server'} in $dir", "debug");
-        mkdir $config{"server"} || die "Cannot create Directory $config{'server'} in $config{'localdir'}.\n";
+    unless ( -d $config{"sftp"}->{"server"}){
+        vprint("Creating directory $config{'sftp'}->{'server'} in $dir", "debug");
+        mkdir $config{'sftp'}->{"server"} || die "Cannot create Directory $config{'sftp'}->{'server'} in $config{'localdir'}.\n";
      }
-    chdir $config{"server"};
-    return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
+    chdir $config{'sftp'}->{"server"};
+    return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'sftp'}->{'server'};
 }#}}}
 
 # locally check, if older backups are available#{{{
@@ -587,12 +602,17 @@ sub getConfig(){
 ##print "dir: $dir\n";
 ##exit 1;
 
-   my %src_ftp = (
+    my %src_ftp = (
        user    => $user,
        pass    => $password,
        server  => $host,
        dir     => $dir
-   );
+    );
+
+    if (($encrypt) && ($hardlink)){
+        vprint("Encryption does not work, with hardlinking. Turning hardlinking off!", "warn");
+        $hardlink = !$hardlink;
+    }
 
     my %config = (#{{{
         sftp     =>  \%src_ftp,
@@ -610,6 +630,7 @@ sub getConfig(){
         hardlink =>  $hardlink,
         enc      =>  $encrypt
     );#}}}
+
 
     my %dst_ftp;
     if (isFTP($localdir)){
@@ -665,7 +686,7 @@ Ignoring --passfile. You probably want the --encrypt switch.", "warn");
 # print, if debug is set#{{{
 sub vprint {
     my ($msg, $facility) = @_;
-    if ($config{"debug"}) {
+    if ($config{"debug"} or $facility eq "warn" or $facility eq "error") {
         print "[$facility] $msg\n";
     }
 }#}}}
@@ -709,18 +730,18 @@ sub printStats {
         $size_unit       = "kB";
     }
     # Gigabytes
-    if ($bandwith >= 1024*1024*1024){
-        $bandwith  = sprintf("%02d", $bandwith/(1024*1024*1024));
+    if ($bandwidth >= 1024*1024*1024){
+        $bandwidth  = sprintf("%02d", $bandwidth/(1024*1024*1024));
         $size_unitb     = "GB";
     }
     # Megabytes
-    elsif ($bandwith >= 1024*1024){
-        $bandwith  = sprintf("%02d", $bandwith/(1024*1024));
+    elsif ($bandwidth >= 1024*1024){
+        $bandwidth  = sprintf("%02d", $bandwidth/(1024*1024));
         $size_unitb       = "MB";
     }
     # Kilobytes
-    elsif ($bandwith >= 1024){
-        $bandwith  = sprintf("%02d", $bandwith/1024);
+    elsif ($bandwidth >= 1024){
+        $bandwidth  = sprintf("%02d", $bandwidth/1024);
         $size_unitb       = "kB";
     }#}}}
 
@@ -732,7 +753,7 @@ sub printStats {
     print "Folder:\t\t$stat{'dirs'}\n";
     print "Duration: \t$duration $time_unit\n";
     print "Transfered: \t$stat{'size'} $size_unit\n";
-    print "Bandwith: \t$bandwidth bytes/s\n"; 
+    print "Bandwith: \t$bandwidth $size_unitb/s\n"; 
     print "=" x 70;
     print "\n\n";
 }#}}}
@@ -755,14 +776,13 @@ sub deltree {
 
 # encrypt all files#{{{
 sub GPGencrypt {
-#   no strict "subs";
+    no strict "subs";
     my $file = shift;
     my $gpg = new GnuPG();
     my $password = $config{'epasswd'};
-    vprint("encrypting $file using provided password","debug");
-    return undef unless defined($gpg->encrypt(plaintext => $file, output => $file.".gpg", passphrase => $password, symmetric => 1));
+    #vprint("encrypting $file using provided password","debug");
+    $gpg->encrypt(plaintext => $file, output => $file.".gpg", passphrase => $password, symmetric => 1);
     unlink $file;
-    return 1;
 }#}}}
 
 # ask interactively for passphrase #{{{
@@ -821,9 +841,9 @@ sub RsyncBackupDirs{
         $rsync->defopts({"link-dest" => $lsrc.$config{'ospath'}});
     }
     my $cmd = $rsync->getcmd();
-    foreach (@$cmd) {
-        print "$_\n";
-    }
+#    foreach (@$cmd) {
+#        print "$_\n";
+#    }
     #$rsync->exec({ src => $src, dest => $dest}) or print "[error] Rsync call failed, aborting ...\n";
     $rsync->exec or print "[error] Rsync call failed, aborting ...\n";
     my $status = $rsync->status;
@@ -852,6 +872,11 @@ sub parseCmdline{
     ( $user1,  $pass1,  $host) = ( $a_uri[2]  =~ /(?:([^:@]*)(?::([^@]*))?@)?(.*)/);
     if ((defined($a_uri[3]) and not ($a_uri[3] eq  ""))){
          $dir1         = $a_uri[3];
+    }
+    my $mach = Net::Netrc->lookup($host);
+    if (defined($mach) && !defined($pass1)){
+        vprint("Using login information from .netrc", "debug");
+        ( $user, $pass ) = ($mach->lpa)[0,1];
     }
     if ((!defined($pass1)) && defined($user1) && ($user1 ne $user)  ) {#{{{
         ReadMode('noecho');
