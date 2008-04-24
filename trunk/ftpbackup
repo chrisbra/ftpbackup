@@ -3,6 +3,7 @@
 # $Id$
 
 # Perl POD documentation {{{
+
 =head1 NAME
 
 ftpbackup - backup from an ftp server
