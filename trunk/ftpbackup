@@ -576,7 +576,7 @@ sub getConfig(){
                'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
-    ( $user, $password, $host, $dir ) = parseCmdline(@ARGV, "source" );
+    ( $user, $password, $host, $dir ) = parseCmdline("source", @ARGV );
 
 
 ### Only for testing purposes
@@ -613,7 +613,7 @@ sub getConfig(){
 
     my %dst_ftp;
     if (isFTP($localdir)){
-        ( $user, $password, $host, $dir ) = parseCmdline(($localdir, "destination"));
+        ( $user, $password, $host, $dir ) = parseCmdline(("destination", $localdir));
         %dst_ftp = (
             user     =>  $user,
             pass     =>  $password,
