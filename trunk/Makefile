@@ -32,10 +32,13 @@ oldversion:
 undo:
 	-mv -f ${PERLSCRIPT}.orig ${PERLSCRIPT}
 
+commit:
+	svn commit -m "increased version number" $(PERLSCRIPT)
+
 deb:
 	dpkg-buildpackage -rfakeroot -k${KEY}
 
-release: clean newversion all deb
+release: clean newversion commit all deb
 
 ftpbackup.1:
 	pod2man --center=" " --release="ftpbackup" $(PERLSCRIPT) > $@;

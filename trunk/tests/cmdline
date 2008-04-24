@@ -1,9 +1,9 @@
 # this can be automatically be tested using
 # a simple loop:
 # e.g. while read line; do eval $line; done < 'thisfile'
-./ftpbackup.pl
-./ftpbackup.pl ftp://server
-./ftpbackup.pl ftp://server/
-./ftpbackup.pl ftp://server/directory
-./ftpbackup.pl ftp://user:password@server
-./ftpbackup.pl ftp://user@server/directory
+./ftptest.pl
+./ftptest.pl ftp://server
+./ftptest.pl ftp://server/
+./ftptest.pl ftp://server/directory
+./ftptest.pl ftp://user:password@server
+./ftptest.pl ftp://user@server/directory
