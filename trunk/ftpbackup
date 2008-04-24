@@ -48,7 +48,11 @@ create it) and below that directory a directory of the I<server>.
 (e.g. when running on Apr. 4th, 2008 and backing up kernel.org,
 B<ftpbackup> would create a directory structure I<20080404/kernel.org/>)
 
-=item B<-d>, B<--debug>
+You can enter a ftp url here as well. In this case, B<ftpbackup> will try
+to make a direct ftp connection from the source ftp server to the destination
+ftp server and copies all data to the destination ftp server directly.
+
+=item B<--debug>
 
 Turn on Debugging Infos.
 
@@ -297,7 +301,8 @@ printStats if $config{'stats'};
 
 # Procedures#{{{
 
-sub FTPgetFiles {#{{{
+# transfer files#{{{
+sub FTPgetFiles {
     (my $ftp, my $list, my $ldir, my $dftp) = @_;
     unless (defined($dftp)){
         mkdir $ldir unless -d $ldir;
@@ -368,7 +373,8 @@ sub FTPgetFiles {#{{{
     $ftp->cdup();
 }#}}}
 
-sub FTPinit {#{{{
+# initialize ftp connection #{{{
+sub FTPinit {
     my $ftpc = shift;
     my %ftpcon = %{$ftpc};
     # This looks a little bit odd, Passive mode is enabled, if $config{'active'} is not zero
@@ -393,12 +399,14 @@ sub FTPinit {#{{{
     return $ftp;
 }#}}}
 
-sub FTPlist{#{{{
+# returns a list of available files/directories at ftp server and directory#{{{
+sub FTPlist{
     (my $ftp, my $dir)  = @_;
     return $ftp->dir($dir);
 }#}}}
 
-sub usage{#{{{
+# Print usage (switch --help)#{{{
+sub usage{
     chomp(my $name=`basename $0`);
     print <<EOF;
 $name $VERSION
@@ -411,7 +419,7 @@ If no username is given, $name tries to use anonymous login.
 Option:
 -h --help              This screen
 --port                 FTP Server Port
--d|--debug             for debugging $name
+--debug                for debugging $name
 --[no]recursion        (do not) download recursively
 --active               use active mode (passive=default)
 --encrypt              enable encryption using symmetric gpg encryption.
@@ -421,7 +429,7 @@ Option:
                        use the password found in file as symmetric
                        passphrase.
 --destination=dir      Save downloaded files in dir (default: current 
-                       directory)
+                       directory). You can also specify an ftp url.
 --removesrc            Try to remove the directory on the FTP server
                        when finished.
 --exclude='pattern'    Use an exclude pattern. Pattern  is matched
@@ -429,7 +437,7 @@ Option:
                        several times.
 --hardlink             hardlink backups using rsync
 
-URL should generally be of the form: ftp://[user:password]\@host[/directory],
+URL should generally be of the form: ftp://[user:password\@]host[/directory],
 where user and password are optionally 
 
 For example:
@@ -441,7 +449,8 @@ EOF
      exit(0);
 }#}}}
 
-sub FTPinitLocal{#{{{
+# Create local backup directory#{{{
+sub FTPinitLocal{
 #   my $config   = shift;
 
     # Datum im Format YYYYMMDD
@@ -464,7 +473,9 @@ sub FTPinitLocal{#{{{
     return $config{"localdir"} . $config{"ospath"} . $dir . $config{'ospath'} . $config{'server'};
 }#}}}
 
-sub FTPcheckOldVers{#{{{
+# locally check, if older backups are available#{{{
+# and delete oldest backups, if we have too many
+sub FTPcheckOldVers{
     my $temp   = shift;
     #my $config = shift;
     if (@temp >= $config{'keep'}){
@@ -497,7 +508,8 @@ sub FTPcheckOldVers{#{{{
     return \@array;
 }#}}}
 
-sub getConfig(){#{{{
+# Determine Configuration#{{{
+sub getConfig(){
     
     # Default Options, these can be overruled
     # using commandline optins
@@ -530,13 +542,13 @@ sub getConfig(){#{{{
     # Operating System specific
     my $ospath  = ($Config{"osname"} =~ "MSWin" ) ? '\\' : '/';
 
-    # Statistics Hash
+    # Statistics Hash#{{{
     my %statistics  =  (
         stime    => time,
         files    => 0,
         dirs     => 0,
         size     => 0
-    );
+    );#}}}
 
     # Encrpytion: 0 disabled, 1 enabled
     my $encrypt  = 0;
@@ -564,10 +576,11 @@ sub getConfig(){#{{{
                'hardlink'  => \$hardlink,
                'exclude=s' => \@exclude);#}}}
 
-    ( $user, $password, $host, $dir ) = parseCmdline(@ARGV);
+    ( $user, $password, $host, $dir ) = parseCmdline(@ARGV, "source" );
 
 
-## Only for testing purposes
+### Only for testing purposes
+### do not remove, they will be used for testing purposes!
 ##print "user: $user\n";
 ##print "password: $password\n";
 ##print "host: $host\n";
@@ -600,7 +613,7 @@ sub getConfig(){#{{{
 
     my %dst_ftp;
     if (isFTP($localdir)){
-        ( $user, $password, $host, $dir ) = parseCmdline(($localdir));
+        ( $user, $password, $host, $dir ) = parseCmdline(($localdir, "destination"));
         %dst_ftp = (
             user     =>  $user,
             pass     =>  $password,
@@ -608,23 +621,31 @@ sub getConfig(){#{{{
             dir      =>  $dir
         );
         $config{'dftp'}=\%dst_ftp;
+        if ($config{'enc'}) {
+            vprint("Encryption does not work, when storing on a remote ftp server. Turning off", "warn");
+            $config{'enc'} = !$config{'enc'};
+        }
+        if ($config{'hardlink'}) {
+            vprint("Hardlinking does not work, when storing on a remote ftp server. Turning off", "warn");
+            $config{'hardlink'} = !$config{'hardlink'};
+        }
     }
 
 
     $config{"localdir"}=glob($config{"localdir"});
 
     # Determine password for ftp-connection
-#    no strict 'refs';
-    foreach my $ftp (( "sftp", "dftp")){
-#        print "$ftp\n";
-        if ((!defined($config{"$ftp"}->{'pass'})) or ($config{"$ftp"}->{'pass'} eq "")) {#{{{
-            ReadMode('noecho');
-            print "No Password has been given, \nplease type password for user $config{'$ftp'}->{'user'}: ";
-            chomp($config{'$ftp'}->{'pass'} = ReadLine(0));
-            print "\n";
-            ReadMode('restore');
-        }#}}}
-    }
+#    foreach my $ftp (( "sftp", "dftp")){
+#        if ((!defined($config{"$ftp"}->{'pass'})) or ($config{"$ftp"}->{'pass'} eq "")) {#{{{
+#            ReadMode('noecho');
+#            my $c  = ($ftp =~ "sftp") ? "source" : "destination";
+#            print "TEST\n";
+#            print "No Password has been given, for $c\nplease type password for user $config{'$ftp'}->{'user'}: ";
+#            chomp($config{'$ftp'}->{'pass'} = ReadLine(0));
+#            print "\n";
+#            ReadMode('restore');
+#        }#}}}
+#    }
 
     if (defined($passfile) and (not $config{'enc'} )){
         vprint("You specified a passwordfile, but did not enable encryption.
@@ -641,14 +662,16 @@ Ignoring --passfile. You probably want the --encrypt switch.", "warn");
     return %config;
 }#}}}
 
-sub vprint {#{{{
+# print, if debug is set#{{{
+sub vprint {
     my ($msg, $facility) = @_;
     if ($config{"debug"}) {
         print "[$facility] $msg\n";
     }
 }#}}}
 
-sub printStats {#{{{
+# print a statistic summary#{{{
+sub printStats {
     my %stat= %{$config{'statistics'}};
     $stat{'etime'} = time;
     my $duration   = $stat{'etime'} - $stat{'stime'};
@@ -656,6 +679,8 @@ sub printStats {#{{{
     my $bandwith   = 0;
     my $time_unit  = "sec";
     my $size_unit  = "bytes";
+    my $size_unitb = "bytes";
+    # Calculation of units#{{{
     if ($duration >= 3600*24){
         $duration  = sprintf("%02d", $duration/(3600*24));
         $time_unit = 'days';
@@ -683,8 +708,24 @@ sub printStats {#{{{
         $stat{'size'}  = sprintf("%02d", $stat{'size'}/1024);
         $size_unit       = "kB";
     }
+    # Gigabytes
+    if ($bandwith >= 1024*1024*1024){
+        $bandwith  = sprintf("%02d", $bandwith/(1024*1024*1024));
+        $size_unitb     = "GB";
+    }
+    # Megabytes
+    elsif ($bandwith >= 1024*1024){
+        $bandwith  = sprintf("%02d", $bandwith/(1024*1024));
+        $size_unitb       = "MB";
+    }
+    # Kilobytes
+    elsif ($bandwith >= 1024){
+        $bandwith  = sprintf("%02d", $bandwith/1024);
+        $size_unitb       = "kB";
+    }#}}}
 
-    print "\nDownload Summary:\n";
+
+    print "\nTransfer Summary:\n";
     print "=" x 70;
     print "\n";
     print "Files:\t\t$stat{'files'}\n";
@@ -696,7 +737,8 @@ sub printStats {#{{{
     print "\n\n";
 }#}}}
 
-sub deltree {#{{{
+# delete local directory#{{{
+sub deltree {
     my $dir = shift;
     local *DIR;
     opendir DIR, $dir or die "[error]: Cannot open $dir: $!";
@@ -711,7 +753,8 @@ sub deltree {#{{{
     return(0);
 }#}}}
 
-sub GPGencrypt {#{{{
+# encrypt all files#{{{
+sub GPGencrypt {
 #   no strict "subs";
     my $file = shift;
     my $gpg = new GnuPG();
@@ -722,7 +765,8 @@ sub GPGencrypt {#{{{
     return 1;
 }#}}}
 
-sub GPGdetPassphrase{#{{{
+# ask interactively for passphrase #{{{
+sub GPGdetPassphrase{
         my $passfile = shift;
         my $try=0;
         my $passphrase, my $temp1;
@@ -750,7 +794,8 @@ sub GPGdetPassphrase{#{{{
 return $passphrase;
 }#}}}
 
-sub RsyncBackupDirs{#{{{
+# use rsync to create hardlinks in backup directory#{{{
+sub RsyncBackupDirs{
     # src, hardlink_src, destination
     (my $src, my $dest, my $lsrc) = @_;
     # archive sets some defaults, but for reference we include all options.
@@ -785,12 +830,14 @@ sub RsyncBackupDirs{#{{{
     return 1;
 }#}}}
 
-sub parseCmdline{#{{{
+# Parse FTP connection string#{{{
+sub parseCmdline{
     # sane defaults, if everthing fails, these will be used
     my $user         = "anonymous";
     my $pass         = 'none@none.invalid';
     # Welches Directory downloaden
     my $dir          = ".";
+    my $str          = shift;
 
     my $uri = shift(@_);
     if (!defined($uri) or $uri eq "") {
@@ -808,7 +855,7 @@ sub parseCmdline{#{{{
     }
     if ((!defined($pass1)) && defined($user1) && ($user1 ne $user)  ) {#{{{
         ReadMode('noecho');
-        print "No Password has been given, \nplease type password for user $user1: ";
+        print "No Password has been given for $str, \nplease type password for user $user1: ";
         chomp($pass1 = ReadLine(0));
         print "\n";
         ReadMode('restore');
@@ -819,12 +866,14 @@ sub parseCmdline{#{{{
     return  ($user, $pass, $host, $dir);
 }#}}}
 
-sub showVersion {#{{{
+# print Version string#{{{
+sub showVersion {
     print "Version: $VERSION\n";
     exit(0);
 }#}}}
 
-sub isFTP {#{{{
+# returns true, if string starts with ftp#{{{
+sub isFTP {
     my $arg = shift;
     ($arg =~ /^ftp/) ? return 1 : return 0;
 }#}}}
@@ -869,7 +918,8 @@ sub FTPRemoteCheckOldVers{
 
 }#}}}
 
-sub FTPinitRemote{#{{{
+# initialize connection to destination ftp server#{{{
+sub FTPinitRemote{
     my $ftp   = shift;
 
     # Datum im Format YYYYMMDD
@@ -891,7 +941,9 @@ sub FTPinitRemote{#{{{
     return 1;
 }#}}}
 
-sub FTPDirMatchPattern{#{{{
+# return true, if a directory within a directory listing #{{{
+# matches a certain pattern
+sub FTPDirMatchPattern{
     (my $rdir, my $pattern, my $one) = @_;
     $pattern =~ s/\/$//;
 #    if (defined($one)){
@@ -906,6 +958,7 @@ sub FTPDirMatchPattern{#{{{
         }
     }
     return 0;
-}#}}}#}}}
+}#}}}
+#}}}
 
 # vim: set fdm=marker fdl=0 et:
