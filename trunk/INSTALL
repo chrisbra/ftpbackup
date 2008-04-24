@@ -31,7 +31,7 @@ File::Rsync
 
 
 
-2. Installation
+2. automatic Installation
 ================================================
 Once you have all dependencies installed, 
 installation should be a simple matter of 
@@ -46,3 +46,8 @@ make
 install
 
 You'll probably need root permissions to install into /usr, though.
+
+
+3. manual Installation
+================================================
+simply copy the file ftpbackup into your $PATH
