@@ -230,12 +230,15 @@ sub FTPinitRemote;
 sub showVersion;#}}}
 
 # This is main:#{{{
+# Signal handling
+$SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = \&cleanUp;
 
 my $DEBUG  = 1;
 # turn off buffering
 local $|   = 1;
 my $VERSION  = 0.4;
 our %config;
+my $old_dir = abs_path(".");
 $config{'debug'} = $DEBUG;
 %config = getConfig();
 
@@ -272,15 +275,6 @@ else {
         chdir $tdir;
         mkdir $backup_dir;
     }
-    $SIG{TERM} = $SIG{INT} = $SIG{QUIT} = $SIG{HUP} = sub { 
-        if ( -d $tdir ){
-            deltree $tdir; 
-        }
-        if ( -d $backup_dir) {
-            deltree $backup_dir;
-        }
-        die "Unexpected signal, quitting...\n";
-    };
 }
 
 
@@ -984,6 +978,22 @@ sub FTPDirMatchPattern{
     }
     return 0;
 }#}}}
+
+# Clean Up Procedure, called when killed/quit/...#{{{
+sub cleanUp{
+    if (defined($tdir) &&  -d $tdir ){
+        print "deleting $tdir\n";
+        deltree $tdir; 
+    }
+    if (defined($backup_dir)) {
+        $backup_dir =~ s/^\.//;
+        my $pattern='[^/]*$';
+        $backup_dir =~ s/$pattern//;
+        deltree "$old_dir"."$backup_dir";
+    }
+    die "Got signal, quitting...\n";
+}#}}}
+
 #}}}
 
 # vim: set fdm=marker fdl=0 et:
