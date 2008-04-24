@@ -3,7 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: Christian Brabandt <cb@256bit.org>
 Build-Depends: debhelper (>= 5)
-Standards-Version: 3.7.2
+Standards-Version: 3.7.3
 Homepage: http://www.256bit.org/~chrisbra/cms/index.php?cat=ftpbackup
 
 Package: ftpbackup
