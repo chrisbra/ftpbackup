@@ -137,7 +137,8 @@ B<gpg>(1) available in your path.
 
 B<ftpbackup> expects B<FTP> URLs using the following syntax:
 I<ftp://username:password@server/directory>. If no password is
-specified, B<ftpbackup> will ask interactively for the password. If both
+specified, B<ftpbackup> will try to read the users .netrc. If this file
+does not exist it will ask interactively for the password. If both
 username and password are not specified, B<ftpbackup> will use anonymous
 authentication. You can leave out the directory, in which case
 B<ftpbackup> will simply try to download from the server's root level.
