@@ -671,12 +671,14 @@ Ignoring --passfile. You probably want the --encrypt switch.", "warn");
     }
     # determine password fpr gpg encryption
     if ($config{'enc'}){
-        use GnuPG;
+        #    use GnuPG;
         $config{'epasswd'} = GPGdetPassphrase($passfile);
     }
-    if ($config{'hardlink'}){
-        use File::Rsync;
-    }
+#    if ($config{'hardlink'}){
+#        use File::Rsync;
+#    }
+    use if $config{'enc'} GnuPG;
+    use if $config{'hardlink'} GnuPG;
     return %config;
 }#}}}
 
@@ -997,6 +999,7 @@ sub cleanUp{
     die "Got signal, quitting...\n";
 }#}}}
 
+# Parse ftp dir command and set permssions appropriately.#{{{
 sub Chmod{
     my ($file, $perm) = @_;
     # get rid of first char (this is indicator of
@@ -1015,7 +1018,7 @@ sub Chmod{
     vprint("Got permission string $perm, setting permission $fperm for $file", "debug");
     chmod ($fperm, $file);
     return 1;
-}
+}#}}}
 
 
 #}}}
