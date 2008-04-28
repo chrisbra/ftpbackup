@@ -358,6 +358,7 @@ sub FTPgetFiles {
             $config{'statistics'}->{'size'}+=$files[4];
             unless (defined($dftp)){
                 $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
+                Chmod($files[8], $files[0]);
                 my $mtime = $ftp->mdtm($files[8]);
                 utime $mtime, $mtime, ($files[8]);
                 if ($config{'enc'}){
@@ -995,6 +996,27 @@ sub cleanUp{
     }
     die "Got signal, quitting...\n";
 }#}}}
+
+sub Chmod{
+    my ($file, $perm) = @_;
+    # get rid of first char (this is indicator of
+    # file type (e.g. d for directory, - for file ...)
+    $perm =~ s/^.//;
+    my @p = ( $perm =~ /(...)(...)(...)/);
+     my $temp = 0;
+    foreach (@p) {
+        $temp += 4 if /r/;
+        $temp += 2 if /w/;
+        $temp += 1 if /x/;
+        $temp*=10;
+    }
+    $temp/=10;
+    my $fperm = sprintf("%04d", $temp);
+    vprint("Got permission string $perm, setting permission $fperm for $file", "debug");
+    chmod ($fperm, $file);
+    return 1;
+}
+
 
 #}}}
 
