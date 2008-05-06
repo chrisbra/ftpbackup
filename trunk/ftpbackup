@@ -108,6 +108,12 @@ passphrase.
 
 Specify the FTP Server Port
 
+=item B<--permission>
+
+Try to preserve the permissions, as listed by the FTP dir command.
+This option will simply try to set the same permissions as on the remote 
+ftp server by parsing the rwxrwxrwx String.
+
 =item B<--[no]recursion>        
 
 By default, B<ftpbackup> will recursively download all files below the
@@ -358,7 +364,11 @@ sub FTPgetFiles {
             $config{'statistics'}->{'size'}+=$files[4];
             unless (defined($dftp)){
                 $ftp->get($files[8]) or die "[error] Downloading failed: ",$ftp->message;
-                Chmod($files[8], $files[0]);
+                if ($config{'perm'}) {
+                    Chmod($files[8], $files[0]);
+                }
+                
+               
                 my $mtime = $ftp->mdtm($files[8]);
                 utime $mtime, $mtime, ($files[8]);
                 if ($config{'enc'}){
@@ -442,6 +452,7 @@ Option:
                        passphrase.
 --destination=dir      Save downloaded files in dir (default: current 
                        directory). You can also specify an ftp url.
+--permission           Preserve permissions.
 --removesrc            Try to remove the directory on the FTP server
                        when finished.
 --exclude='pattern'    Use an exclude pattern. Pattern  is matched
@@ -546,6 +557,8 @@ sub getConfig(){
     my $binary       = 1;
     # Wieviele Versionen behalten:
     my $keep         = 3;
+    # Preserver permissions
+    my $perm         = 0;
 
 
     # exclude patterns
@@ -586,6 +599,7 @@ sub getConfig(){
                'removesrc' => \$delete_source,
                'encrypt'   => \$encrypt,
                'hardlink'  => \$hardlink,
+               'permission' => \$perm,
                'exclude=s' => \@exclude);#}}}
 
     ( $user, $password, $host, $dir ) = parseCmdline("source", @ARGV );
@@ -625,6 +639,7 @@ sub getConfig(){
         statistics => \%statistics,
         delftp   =>  $delete_source,
         hardlink =>  $hardlink,
+        perm     =>  $perm,
         enc      =>  $encrypt
     );#}}}
 
@@ -1016,9 +1031,9 @@ sub Chmod{
         $temp*=10;
     }
     $temp/=10;
-    my $fperm = sprintf("%04d", $temp);
-    vprint("Got permission string $perm, setting permission $fperm for $file", "debug");
-    chmod ($fperm, $file);
+    my $fperm = sprintf("%03d", $temp);
+    vprint("Got permission string $perm, setting permission $fperm for $file", "warn");
+    chmod (oct($fperm), $file);
     return 1;
 }#}}}
 
