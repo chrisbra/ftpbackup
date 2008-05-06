@@ -670,15 +670,14 @@ sub getConfig(){
 Ignoring --passfile. You probably want the --encrypt switch.", "warn");
     }
     # determine password fpr gpg encryption
+    no strict "subs";
+    use if $config{'enc'}, GnuPG;
     if ($config{'enc'}){
-        #    use GnuPG;
         $config{'epasswd'} = GPGdetPassphrase($passfile);
     }
-#    if ($config{'hardlink'}){
-#        use File::Rsync;
-#    }
-    use if $config{'enc'} GnuPG;
-    use if $config{'hardlink'} GnuPG;
+    use if $config{'hardlink'}, File::Rsync;
+
+    use strict "subs";
     return %config;
 }#}}}
 
@@ -775,6 +774,8 @@ sub deltree {
 
 # encrypt all files#{{{
 sub GPGencrypt {
+    # appearantly the module GnuPG does not work with strict subs
+    # so disabling it
     no strict "subs";
     my $file = shift;
     my $gpg = new GnuPG();
@@ -782,6 +783,7 @@ sub GPGencrypt {
     #vprint("encrypting $file using provided password","debug");
     $gpg->encrypt(plaintext => $file, output => $file.".gpg", passphrase => $password, symmetric => 1);
     unlink $file;
+    use strict "subs";
 }#}}}
 
 # ask interactively for passphrase #{{{
