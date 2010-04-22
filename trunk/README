@@ -1,0 +1,157 @@
+NAME
+    ftpbackup - backup from an ftp server
+
+SYNOPSIS
+    ftpbackup [Options] *URL*
+
+DESCRIPTION
+    ftpbackup allows to backup all files from an FTP server locally or even
+    on another ftp server. If no destination is specified, ftpbackup tries
+    to save in the current directory.
+
+    When storing, ftpbackup stores all downloaded files below
+    YYYYMMDD/servername, so you can create a nice little hierachical
+    storage. For each servername, ftpbackup keeps track of a default of 3
+    backups, removing old backups if necessary. If you want to keep more
+    than 3 backup-version, look at the --keep option.
+
+    Additionally ftpbackup can try to hardlink each backup with the previous
+    version similar to how rsync does it (in fact, it uses rsync for
+    hardlinking the data). ftpbackup can also encrypt each downloaded file
+    using "gpg --symmetric".
+
+    If no username/password is specified, ftpbackup will try to authenticat
+    using anonymous logins (this means username=anonymous,
+    password=none@none.invalid).
+
+OPTIONS
+    --active
+        Use active connection mode. (Default is passive).
+
+    --destination=*dir*
+        Store the backups below *dir*. Foreach run ftpbackup will create a
+        directory in the date format 'YYYYMMDD' (as date +'%Y%m%d' would
+        create it) and below that directory a directory of the *server*.
+        (e.g. when running on Apr. 4th, 2008 and backing up kernel.org,
+        ftpbackup would create a directory structure *20080404/kernel.org/*)
+
+        You can enter a ftp url here as well. In this case, ftpbackup will
+        try to make a direct ftp connection from the source ftp server to
+        the destination ftp server and copies all data to the destination
+        ftp server directly.
+
+    --debug
+        Turn on Debugging Infos.
+
+    --encrypt
+        This switch enables symmetric encryption using gpg(1). In order for
+        this to work, gpg(1) needs to be installed and available in your
+        path and the perl module GnuPG needs to be installed. If the option
+        --passfile is not specified, ftpbackup will interactively ask for an
+        encryption password.
+
+        Note that --encrypt will not work, when transfering the data to
+        another ftp server, since the ftp protocoll does not specify such
+        actions.
+
+    --exclude=*'pattern'*
+        Specify an exclude pattern. You can use perl regular expressions
+        (see perlre(1) for details). It is possible to specify this option
+        several times and each pattern will be applied to all files and
+        directories on the server, skipping each match.
+
+    --hardlink
+        When storing the data locally, use rsync(1) to store the data.
+        Basically this will call rsync(1) --archive --hard-links --sparse
+        --link-dest=oldbackup *src/* *dest/* This is handy, when
+        automatically downloading regularly, since that will store each
+        version of a file only once.
+
+        Note, that hardlinking will not work, when transfering to another
+        ftp-server or when trying to encrypt the files. In these cases
+        ftpbackup will silently ignore this option.
+
+    -h, --help
+        Displays the help screen.
+
+    --keep=number
+        Only keep *number* version locally, deleting the oldest version. If
+        not specified, ftpbackup will keep 3 versions.
+
+    --passfile=*file*
+        When encryption has been specified using --encrypt, you can instruct
+        ftpbackup to read *file* for a password. This file needs only to
+        contain the password. ftpbackup will use the whole input as
+        passphrase.
+
+    --port
+        Specify the FTP Server Port
+
+    --permission
+        Try to preserve the permissions, as listed by the FTP dir command.
+        This option will simply try to set the same permissions as on the
+        remote ftp server by parsing the rwxrwxrwx String.
+
+    --[no]recursion
+        By default, ftpbackup will recursively download all files below the
+        given directory. You can turn off recursive downloading using
+        --norecursion
+
+    --removesrc
+        Try to remove the directory on the FTP server when finished. This
+        depends on the servers configuration and the permissions you have.
+        This happens at the end, after the transfer is finished, so if this
+        fails, you still have all data downloaded completely.
+
+    --statistics
+        Print a little statistic when finished.
+
+NOTES
+    ftpbackup requires perl(1) of version 5.8 or higher. If you want to make
+    use of hardlinking your downloaded backups, ftpbackup needs rsync(1)
+    available in your path and the perl module File::Rsync. For encrypting
+    the downloaded files you'll need the perl module GnuPG and gpg(1)
+    available in your path.
+
+  FTP URLs
+    ftpbackup expects FTP URLs using the following syntax:
+    *ftp://username:password@server/directory*. If no password is specified,
+    ftpbackup will try to read the users .netrc. If this file does not exist
+    it will ask interactively for the password. If both username and
+    password are not specified, ftpbackup will use anonymous authentication.
+    You can leave out the directory, in which case ftpbackup will simply try
+    to download from the server's root level.
+
+EXAMPLES
+    ftpbackup --statistics ftp://ftp.eu.kernel.org/pub/
+        Download all data from ftp.eu.kernel.org/pub using anonymous access.
+        When finished print a litte statistic summary.
+
+    ftpbackup --statistics --exclude='\.iso$' ftp://ftp.eu.kernel.org/pub/
+        Download all files, except iso images, when finished print a little
+        summary.
+
+    ftpbackup --statistics --exclude='\.iso$' --encrypt --norecursion
+    ftp://ftp.eu.kernel.org/pub/dist/knoppix
+        Download only files in directory knoppix on the kernel server,
+        excluding iso images and locally encrypting the files. You will be
+        asked for a password when run.
+
+    ftpbackup --destination=ftp://servername/dir --keep=5 --norecursion
+    ftp://ftp.eu.kernel.org/pub/dist/knoppix
+        Download all files in directory knoppix on the kernel server and
+        transfer them to the ftp server servername. All data will be stored
+        in the directory dir. If more than 4 versions exist, the oldest
+        versions will be deleted.
+
+BUGS
+    When run several times a day for the same ftp server, ftpbackup will
+    happily overwrite already existing files. ftpbackup does not yet take
+    care of the permissions on the server. So it will create all files as
+    the current user with the default umask.
+
+AUTHOR
+    Copyright 2008 by Christian Brabandt <cb@256bit.org>
+
+    Licensed under the GNU GPL.
+

@@ -132,6 +132,9 @@ all data downloaded completely.
 Print a little statistic when finished. 
 
 
+
+=back
+
 =head1 NOTES
 
 B<ftpbackup> requires B<perl>(1) of version 5.8 or higher. If you want
@@ -150,7 +153,6 @@ username and password are not specified, B<ftpbackup> will use anonymous
 authentication. You can leave out the directory, in which case
 B<ftpbackup> will simply try to download from the server's root level.
 
-=back
 
 =head1 EXAMPLES
 
